@@ -49,3 +49,8 @@ I configured the debugger to launch the game in a window with the following comm
 `-intro:off -CPUcount:1 -w -CustomResolution:enabled -r1920x1080x32`
 
 You may need to adjust the resolution for your screen.
+
+## Building the DLL on Linux
+
+It is possible to compile the DLL on Linux using `clang` as a cross-compiler.
+Check the [Makefile](Makefile) for details.

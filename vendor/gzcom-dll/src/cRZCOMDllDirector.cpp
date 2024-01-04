@@ -35,7 +35,7 @@ cRZCOMDllDirector::~cRZCOMDllDirector(void) {
 
 bool cRZCOMDllDirector::QueryInterface(uint32_t riid, void** ppvObj) {
 	switch (riid) {
-		case kGZIID_cIGZCOMDirector:
+		case (uint32_t) kGZIID_cIGZCOMDirector:
 			*ppvObj = static_cast<cIGZCOMDirector*>(this);
 			AddRef();
 			return true;
