@@ -65,7 +65,7 @@ namespace
 				&& size > 0)
 			{
 				VS_FIXEDFILEINFO* verInfo = (VS_FIXEDFILEINFO*)lpBuffer;
-				if (verInfo->dwSignature = 0xfeef04bd)
+				if (verInfo->dwSignature == 0xfeef04bd)
 				{
 					uint64_t qwValue = (uint64_t)verInfo->dwFileVersionMS << 32;
 					qwValue |= verInfo->dwFileVersionLS;
