@@ -123,7 +123,7 @@ namespace
 	{
 		// MSVC-style assembly using Intel syntax with clang-cl
 		__asm {
-monorail:
+// monorail:
 			mov edx, dword ptr [esi];
 			push 0x9;
 			mov ecx, esi;
