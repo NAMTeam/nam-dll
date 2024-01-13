@@ -41,6 +41,9 @@ static uint32_t DoTunnelChanged_InjectPoint;
 static uint32_t DoTunnelChanged_ContinueJump;
 static uint32_t DoTunnelChanged_ReturnJump;
 
+static uint32_t DoTransportMenu_InjectPoint;
+static uint32_t DoTransportMenu_ContinueJump;
+
 namespace
 {
 	std::filesystem::path GetDllFolderPath()
@@ -204,6 +207,53 @@ noMatchingTunnelNetwork:
 		}
 	}
 
+	void NAKED_FUN Hook_DoTransportMenu(void)
+	{
+		// network menu groups:
+		// 0x4000 road menu
+		// 0x4001 rail menu
+		// 0x4002 subway menu
+		// 0x4003 power utility menu
+		// 0x4004 water utility menu
+		// 0x4005 highway menu
+		__asm {
+			mov ecx, 0x4006; // new seaport menu group (hopefully unused)
+			lea edi, [esi + 0x29c];
+			push DoTransportMenu_ContinueJump;
+			ret;
+		}
+	}
+
+	void InstallSeaportMenuPatch(const uint16_t gameVersion)
+	{
+		Logger& logger = Logger::GetInstance();
+
+		try
+		{
+			switch (gameVersion)
+			{
+				case 641:
+					DoTransportMenu_InjectPoint = 0x7f3d3b;
+					DoTransportMenu_ContinueJump = 0x7f3d43;
+					break;
+				default:
+					return;
+			}
+			InstallHook(DoTransportMenu_InjectPoint, Hook_DoTransportMenu);
+
+			logger.WriteLine(
+				LogLevel::Info,
+				"Installed the Seaport Menu patch.");
+		}
+		catch (const wil::ResultException& e)
+		{
+			logger.WriteLineFormatted(
+				LogLevel::Error,
+				"Failed to install the Seaport Menu patch.\n%s",
+				e.what());
+		}
+	}
+
 	void InstallMemoryPatches(const uint16_t gameVersion)
 	{
 		// Patch the game's memory to enable a few NAM features.
@@ -211,6 +261,7 @@ noMatchingTunnelNetwork:
 		InstallDiagonalStreetsPatch();
 		InstallDisableAutoconnectForStreetsPatch();
 		InstallTunnelsPatch(gameVersion);
+		InstallSeaportMenuPatch(gameVersion);
 	}
 }
 
