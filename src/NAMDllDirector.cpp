@@ -22,12 +22,31 @@
 #include "SC4VersionDetection.h"
 #include "version.h"
 #include "cIGZCOM.h"
-#include "cRZCOMDllDirector.h"
+#include "cIGZFrameWork.h"
+#include "cIGZMessage2.h"
+#include "cIGZMessage2Standard.h"
+#include "cIGZMessageServer2.h"
+#include "cIGZWin.h"
+#include "cIGZWinMgr.h"
+#include "cISC4App.h"
+#include "cISC4View3DWin.h"
+#include "cRZMessage2COMDirector.h"
+#include "GZServPtrs.h"
 #include <Windows.h>
 #include "wil/resource.h"
 #include "wil/win32_helpers.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
+
+static constexpr uint32_t kMonorailKeyboardShortcut = 0x8BE098F4;
+static constexpr uint32_t kOneWayRoadKeyboardShortcut = 0x4BE098F7;
+static constexpr uint32_t kDirtRoadKeyboardShortcut = 0x6BE098FA;
+static constexpr uint32_t kGroundHighwayKeyboardShortcut = 0x4BE098FD;
+
+static constexpr uint32_t kGZWin_WinSC4App = 0x6104489a;
+static constexpr uint32_t kGZWin_SC4View3DWin = 0x9a47b417;
+
+static constexpr uint32_t kGZIID_cISC4View3DWin = 0xFA47B3F9;
 
 static constexpr std::string_view PluginLogFileName = "NAM.log";
 
@@ -131,7 +150,7 @@ namespace
 	}
 }
 
-class NAMDllDirector final : public cRZCOMDllDirector
+class NAMDllDirector final : public cRZMessage2COMDirector
 {
 public:
 
@@ -152,6 +171,97 @@ public:
 		return kNAMDllDirectorID;
 	}
 
+	void ProcessKeyboardShortcut(intptr_t shortcut)
+	{
+		cISC4AppPtr pSC4App;
+
+		if (pSC4App)
+		{
+			cIGZWin* mainWindow = pSC4App->GetMainWindow();
+
+			if (mainWindow)
+			{
+				cIGZWin* pParentWin = mainWindow->GetChildWindowFromID(kGZWin_WinSC4App);
+
+				if (pParentWin)
+				{
+					cISC4View3DWin* pView3D = nullptr;
+
+					if (pParentWin->GetChildAs(
+						kGZWin_SC4View3DWin,
+						kGZIID_cISC4View3DWin,
+						reinterpret_cast<void**>(&pView3D)))
+					{
+						// SC4's keyboard shortcuts work by passing the message ID cast to cIGZCommandParameterSet
+						// as the first cIGZCommandParameterSet parameter.
+						//
+						// The additional parameters (if any) will be wrapped in a cIGZCommandParameterSet and passed
+						// in the second cIGZCommandParameterSet parameter.
+						// The network tool shortcuts do not use the second parameter, so we use a placeholder value.
+
+						uint32_t dwMessageID = static_cast<uint32_t>(shortcut);
+						cIGZCommandParameterSet& command1 = *reinterpret_cast<cIGZCommandParameterSet*>(shortcut);
+						cIGZCommandParameterSet& command2 = *reinterpret_cast<cIGZCommandParameterSet*>(0xDEADBEEF);
+
+						pView3D->ProcessCommand(dwMessageID, command1, command2);
+
+						pView3D->Release();
+					}
+				}
+			}
+		}
+	}
+
+	bool DoMessage(cIGZMessage2* pMsg)
+	{
+		cIGZMessage2Standard* pStandardMessage = static_cast<cIGZMessage2Standard*>(pMsg);
+		uint32_t msgType = pStandardMessage->GetType();
+
+		switch (msgType)
+		{
+		case kMonorailKeyboardShortcut:
+		case kOneWayRoadKeyboardShortcut:
+		case kDirtRoadKeyboardShortcut:
+		case kGroundHighwayKeyboardShortcut:
+			ProcessKeyboardShortcut(msgType);
+			break;
+		}
+
+		return true;
+	}
+
+	bool PostAppInit()
+	{
+		Logger& logger = Logger::GetInstance();
+
+		cIGZMessageServer2Ptr pMsgServ;
+		if (pMsgServ)
+		{
+			std::vector<uint32_t> requiredNotifications;
+			requiredNotifications.push_back(kMonorailKeyboardShortcut);
+			requiredNotifications.push_back(kOneWayRoadKeyboardShortcut);
+			requiredNotifications.push_back(kDirtRoadKeyboardShortcut);
+			requiredNotifications.push_back(kGroundHighwayKeyboardShortcut);
+
+			for (uint32_t messageID : requiredNotifications)
+			{
+				if (!pMsgServ->AddNotification(this, messageID))
+				{
+					logger.WriteLine(LogLevel::Error, "Failed to subscribe to the required notifications.");
+					return false;
+				}
+			}
+		}
+		else
+		{
+			logger.WriteLine(LogLevel::Error, "Failed to subscribe to the required notifications.");
+			return false;
+		}
+
+
+		return true;
+	}
+
 	bool OnStart(cIGZCOM* pCOM)
 	{
 		const uint16_t gameVersion = versionDetection.GetGameVersion();
@@ -167,6 +277,17 @@ public:
 				LogLevel::Error,
 				"Requires game version 641, found game version %d.",
 				gameVersion);
+		}
+
+		cIGZFrameWork* const pFramework = RZGetFrameWork();
+
+		if (pFramework->GetState() < cIGZFrameWork::kStatePreAppInit)
+		{
+			pFramework->AddHook(this);
+		}
+		else
+		{
+			PreAppInit();
 		}
 
 		return true;
