@@ -2,7 +2,7 @@
  * This file is part of nam-dll, a DLL Plugin for SimCity 4
  * that improves interoperability with the Network Addon Mod.
  *
- * Copyright (c) 2023 NAM Team contributors
+ * Copyright (c) 2023, 2024 NAM Team contributors
  *
  * nam-dll is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -18,6 +18,7 @@
  * along with nam-dll.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Check4GBPatch.h"
 #include "Logger.h"
 #include "SC4VersionDetection.h"
 #include "version.h"
@@ -145,6 +146,7 @@ public:
 		Logger& logger = Logger::GetInstance();
 		logger.Init(logFilePath, LogLevel::Error);
 		logger.WriteLogFileHeader("NAM DLL v" PLUGIN_VERSION_STR);
+		Check4GBPatch::WritePatchStatusToLogFile();
 	}
 
 	uint32_t GetDirectorID() const

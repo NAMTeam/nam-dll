@@ -18,6 +18,7 @@
     <ClCompile Include="..\vendor\gzcom-dll\src\cRZMessage2Standard.cpp" />
     <ClCompile Include="..\vendor\gzcom-dll\src\cS3DVector3.cpp" />
     <ClCompile Include="..\vendor\gzcom-dll\src\cSCBaseProperty.cpp" />
+    <ClCompile Include="Check4GBPatch.cpp" />
     <ClCompile Include="Logger.cpp" />
     <ClCompile Include="NAMDllDirector.cpp" />
     <ClCompile Include="SC4VersionDetection.cpp" />
@@ -25,6 +26,7 @@
   <ItemGroup>
     <ClInclude Include="..\vendor\gzcom-dll\include\cIGZCOM.h" />
     <ClInclude Include="..\vendor\gzcom-dll\include\cRZCOMDllDirector.h" />
+    <ClInclude Include="Check4GBPatch.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="SC4VersionDetection.h" />

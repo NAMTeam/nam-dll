@@ -34,6 +34,9 @@
     <ClCompile Include="..\vendor\gzcom-dll\src\cSCBaseProperty.cpp">
       <Filter>SourceFiles\gzcom-dll</Filter>
     </ClCompile>
+    <ClCompile Include="Check4GBPatch.cpp">
+      <Filter>SourceFiles</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="version.h">
@@ -53,6 +56,9 @@
     </ClInclude>
     <ClInclude Include="..\vendor\gzcom-dll\include\cIGZCOM.h">
       <Filter>Header Files\gzcom-dll</Filter>
+    </ClInclude>
+    <ClInclude Include="Check4GBPatch.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
