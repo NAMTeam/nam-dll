@@ -171,7 +171,7 @@ public:
 		return kNAMDllDirectorID;
 	}
 
-	void ProcessKeyboardShortcut(intptr_t shortcut)
+	void ProcessKeyboardShortcut(uint32_t dwMessageID)
 	{
 		cISC4AppPtr pSC4App;
 
@@ -199,8 +199,7 @@ public:
 						// in the second cIGZCommandParameterSet parameter.
 						// The network tool shortcuts do not use the second parameter, so we use a placeholder value.
 
-						uint32_t dwMessageID = static_cast<uint32_t>(shortcut);
-						cIGZCommandParameterSet& command1 = *reinterpret_cast<cIGZCommandParameterSet*>(shortcut);
+						cIGZCommandParameterSet& command1 = *reinterpret_cast<cIGZCommandParameterSet*>(dwMessageID);
 						cIGZCommandParameterSet& command2 = *reinterpret_cast<cIGZCommandParameterSet*>(0xDEADBEEF);
 
 						pView3D->ProcessCommand(dwMessageID, command1, command2);
