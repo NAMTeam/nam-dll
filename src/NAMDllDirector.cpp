@@ -274,7 +274,7 @@ public:
 			Logger& logger = Logger::GetInstance();
 			logger.WriteLineFormatted(
 				LogLevel::Error,
-				"Requires game version 641, found game version %d.",
+				"The memory patches require game version 641, found game version %d.",
 				gameVersion);
 		}
 
