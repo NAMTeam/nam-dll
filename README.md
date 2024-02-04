@@ -2,6 +2,29 @@
 
 A DLL Plugin for SimCity 4 that improves interoperability with the Network Addon Mod.
 
+## Features
+
+### Additional Network Tool Shortcuts
+
+Adds keyboard shortcuts for the monorail, one way road, dirt road and ground highway network tools.
+This is something that Maxis left partially implemented, this DLL adds the missing features.
+
+If you are using a mod that alters the city keyboard shortcuts such as CasperVG's AutoHistorical DLL mod, you will need to edit the KEYCFG
+file included in that mod.
+Otherwise, create a new patch that overrides the city KEYCFG file in SimCity_1.dat, TGI 0xA2E3D533, 0x6A231EAA, 0x6A9362EF.    
+
+Then add the following data to the end of the new KEYCFG file:
+
+```
+; Network tool keyboard shortcuts
+Control Y               = 0x8BE098F4 "Monorail"
+Control E               = 0x6BE098FA "Dirt Road"
+Shift E                 = 0x4BE098F7 "One-way Road"
+Alt E                   = 0x4BE098FD "Ground Highway"
+```
+
+You can customize the shortcuts to use different keys, see the documentation at the top of the KEYCFG file.
+
 ## System Requirements
 
 * Windows 10 or later
