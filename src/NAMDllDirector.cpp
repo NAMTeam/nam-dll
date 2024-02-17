@@ -37,6 +37,12 @@
 #include "wil/resource.h"
 #include "wil/win32_helpers.h"
 
+#ifdef __clang__
+#define NAKED_FUN __attribute__((naked))
+#else
+#define NAKED_FUN __declspec(naked)
+#endif
+
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
 static constexpr uint32_t kMonorailKeyboardShortcut = 0x8BE098F4;
@@ -50,6 +56,10 @@ static constexpr uint32_t kGZWin_SC4View3DWin = 0x9a47b417;
 static constexpr uint32_t kGZIID_cISC4View3DWin = 0xFA47B3F9;
 
 static constexpr std::string_view PluginLogFileName = "NAM.log";
+
+static uint32_t DoTunnelChanged_InjectPoint;
+static uint32_t DoTunnelChanged_ContinueJump;
+static uint32_t DoTunnelChanged_ReturnJump;
 
 namespace
 {
@@ -74,6 +84,15 @@ namespace
 
 		// Patch the memory at the specified address.
 		*((uint8_t*)address) = newValue;
+	}
+
+	void InstallHook(uint32_t address, void (*pfnFunc)(void))
+	{
+		DWORD oldProtect;
+		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect((void *)address, 5, PAGE_EXECUTE_READWRITE, &oldProtect));
+
+		*((uint8_t*)address) = 0xE9;
+		*((uint32_t*)(address+1)) = ((uint32_t)pfnFunc) - address - 5;
 	}
 
 	void InstallDiagonalStreetsPatch()
@@ -119,35 +138,99 @@ namespace
 		}
 	}
 
-	void InstallRHWTunnelsPatch()
+	// TODO Currently this function is invoked with JMP+RET which can lead to suboptimal branch prediction due to imbalanced CALL+RET operations.
+	void NAKED_FUN Hook_DoTunnelChanged(void)
+	{
+		// MSVC-style assembly using Intel syntax with clang-cl
+		__asm {
+// monorail:
+			mov edx, dword ptr [esi];
+			push 0x9;
+			mov ecx, esi;
+			call dword ptr [edx + 0x58];
+			test al, al;
+			jz dirtroad;
+			mov eax, 0x9;
+			jmp matchingTunnelNetwork;
+
+dirtroad:
+			mov edx, dword ptr [esi];
+			push 0xb;
+			mov ecx, esi;
+			call dword ptr [edx + 0x58];
+			test al, al;
+			jz street;
+			mov eax, 0xb;
+			jmp matchingTunnelNetwork;
+
+street:
+			mov edx, dword ptr [esi];
+			push 0x3;
+			mov ecx, esi;
+			call dword ptr [edx + 0x58];
+			test al, al;
+			jz lightrail;
+			mov eax, 0x3;
+			jmp matchingTunnelNetwork;
+
+lightrail:
+			mov edx, dword ptr [esi];
+			push 0x8;
+			mov ecx, esi;
+			call dword ptr [edx + 0x58];
+			test al, al;
+			jz noMatchingTunnelNetwork;
+			mov eax, 0x8;
+			// jmp matchingTunnelNetwork;
+
+matchingTunnelNetwork:
+			push DoTunnelChanged_ContinueJump;
+			ret;
+
+noMatchingTunnelNetwork:
+			push DoTunnelChanged_ReturnJump;
+			ret;
+		}
+	}
+
+	void InstallTunnelsPatch(const uint16_t gameVersion)
 	{
 		Logger& logger = Logger::GetInstance();
 
 		try
 		{
-			OverwriteMemory((void*)0x7141ac, 0x0b);
-			OverwriteMemory((void*)0x7141bb, 0x0b);
+			switch (gameVersion)
+			{
+				case 641:
+					DoTunnelChanged_InjectPoint = 0x714222;
+					DoTunnelChanged_ContinueJump = 0x714238;
+					DoTunnelChanged_ReturnJump = 0x714398;
+					break;
+				default:
+					return;
+			}
+			InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
 
 			logger.WriteLine(
 				LogLevel::Info,
-				"Installed the RHW Tunnels patch.");
+				"Installed the Tunnels patch for RHW, Street and Lightrail.");
 		}
 		catch (const wil::ResultException& e)
 		{
 			logger.WriteLineFormatted(
 				LogLevel::Error,
-				"Failed to install the RHW Tunnels patch.\n%s",
+				"Failed to install the Tunnels patch for RHW, Street and Lightrail.\n%s",
 				e.what());
 		}
 	}
 
-	void InstallMemoryPatches()
+	void InstallMemoryPatches(const uint16_t gameVersion)
 	{
 		// Patch the game's memory to enable a few NAM features.
 		// These patches were all developed by memo.
 		InstallDiagonalStreetsPatch();
 		InstallDisableAutoconnectForStreetsPatch();
-		InstallRHWTunnelsPatch();
+		InstallTunnelsPatch(gameVersion);
 	}
 }
 
@@ -269,7 +352,7 @@ public:
 
 		if (gameVersion == 641)
 		{
-			InstallMemoryPatches();
+			InstallMemoryPatches(gameVersion);
 		}
 		else
 		{
