@@ -29,7 +29,7 @@ namespace
 		const HMODULE executableBaseAddress = GetModuleHandle(nullptr);
 		if (executableBaseAddress == nullptr)
 		{
-			DWORD lastError = GetLastError();
+			uint32_t lastError = GetLastError();
 
 			char errorMessage[1024]{};
 
