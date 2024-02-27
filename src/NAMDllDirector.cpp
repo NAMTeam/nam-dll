@@ -27,6 +27,11 @@
 #include "cIGZMessage2.h"
 #include "cIGZMessage2Standard.h"
 #include "cIGZMessageServer2.h"
+#include "cGZPersistResourceKey.h"
+#include "cRZAutoRefCount.h"
+#include "cIGZPersistResourceManager.h"
+#include "cIGZWinKeyAccelerator.h"
+#include "cIGZWinKeyAcceleratorRes.h"
 #include "cIGZWin.h"
 #include "cIGZWinMgr.h"
 #include "cISC4App.h"
@@ -44,6 +49,8 @@
 #endif
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
+
+static constexpr uint32_t kSC4MessagePostCityInit = 0x26D31EC1;
 
 static constexpr uint32_t kMonorailKeyboardShortcut = 0x8BE098F4;
 static constexpr uint32_t kOneWayRoadKeyboardShortcut = 0x4BE098F7;
@@ -256,6 +263,68 @@ public:
 		return kNAMDllDirectorID;
 	}
 
+	void RegisterKeyboardShortcuts()
+	{
+		cIGZPersistResourceManagerPtr pResMan;
+
+		if (pResMan)
+		{
+			// We load our shortcuts from a private KEYCFG file and add them
+			// into the game when the city is initialized.
+			// This avoids the compatibility issues that come with overriding
+			// the game's main city/3D view KEYCFG file.
+
+			cGZPersistResourceKey key(0xA2E3D533, 0xFB577FA1, 0xBAFC749C);
+
+			cRZAutoRefCount<cIGZWinKeyAcceleratorRes> pKeyAcceleratorRes;
+
+			// GetPrivateResource fetches the resource without adding it to the game's
+			// in-memory resource cache.
+			if (pResMan->GetPrivateResource(
+				key,
+				kGZIID_cIGZWinKeyAcceleratorRes,
+				pKeyAcceleratorRes.AsPPVoid(),
+				0,
+				nullptr))
+			{
+				cISC4AppPtr pSC4App;
+
+				if (pSC4App)
+				{
+					cIGZWin* mainWindow = pSC4App->GetMainWindow();
+
+					if (mainWindow)
+					{
+						cIGZWin* pParentWin = mainWindow->GetChildWindowFromID(kGZWin_WinSC4App);
+
+						if (pParentWin)
+						{
+							cRZAutoRefCount<cISC4View3DWin> pView3D;
+
+							if (pParentWin->GetChildAs(
+								kGZWin_SC4View3DWin,
+								kGZIID_cISC4View3DWin,
+								pView3D.AsPPVoid()))
+							{
+								cIGZWinKeyAccelerator* pKeyAccelerator = pView3D->GetKeyAccelerator();
+
+								if (pKeyAccelerator)
+								{
+									pKeyAcceleratorRes->RegisterResources(pKeyAccelerator);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void PostCityInit(cIGZMessage2Standard* pStandardMessage)
+	{
+		RegisterKeyboardShortcuts();
+	}
+
 	void ProcessKeyboardShortcut(uint32_t dwMessageID)
 	{
 		cISC4AppPtr pSC4App;
@@ -270,12 +339,12 @@ public:
 
 				if (pParentWin)
 				{
-					cISC4View3DWin* pView3D = nullptr;
+					cRZAutoRefCount<cISC4View3DWin> pView3D;
 
 					if (pParentWin->GetChildAs(
 						kGZWin_SC4View3DWin,
 						kGZIID_cISC4View3DWin,
-						reinterpret_cast<void**>(&pView3D)))
+						pView3D.AsPPVoid()))
 					{
 						// SC4's keyboard shortcuts work by passing the message ID cast to cIGZCommandParameterSet
 						// as the first cIGZCommandParameterSet parameter.
@@ -288,8 +357,6 @@ public:
 						cIGZCommandParameterSet& command2 = *reinterpret_cast<cIGZCommandParameterSet*>(0xDEADBEEF);
 
 						pView3D->ProcessCommand(dwMessageID, command1, command2);
-
-						pView3D->Release();
 					}
 				}
 			}
@@ -303,6 +370,9 @@ public:
 
 		switch (msgType)
 		{
+		case kSC4MessagePostCityInit:
+			PostCityInit(pStandardMessage);
+			break;
 		case kMonorailKeyboardShortcut:
 		case kOneWayRoadKeyboardShortcut:
 		case kDirtRoadKeyboardShortcut:
@@ -326,6 +396,7 @@ public:
 			requiredNotifications.push_back(kOneWayRoadKeyboardShortcut);
 			requiredNotifications.push_back(kDirtRoadKeyboardShortcut);
 			requiredNotifications.push_back(kGroundHighwayKeyboardShortcut);
+			requiredNotifications.push_back(kSC4MessagePostCityInit);
 
 			for (uint32_t messageID : requiredNotifications)
 			{
