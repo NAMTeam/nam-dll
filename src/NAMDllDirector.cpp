@@ -41,6 +41,7 @@
 #include <Windows.h>
 #include "wil/resource.h"
 #include "wil/win32_helpers.h"
+#include "Patching.h"
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
@@ -79,37 +80,14 @@ namespace
 		return temp.parent_path();
 	}
 
-	void OverwriteMemory(void* address, uint8_t newValue)
-	{
-		DWORD oldProtect;
-		// Allow the executable memory to be written to.
-		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect(
-			address,
-			sizeof(newValue),
-			PAGE_EXECUTE_READWRITE,
-			&oldProtect));
-
-		// Patch the memory at the specified address.
-		*((uint8_t*)address) = newValue;
-	}
-
-	void InstallHook(uint32_t address, void (*pfnFunc)(void))
-	{
-		DWORD oldProtect;
-		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect((void *)address, 5, PAGE_EXECUTE_READWRITE, &oldProtect));
-
-		*((uint8_t*)address) = 0xE9;
-		*((uint32_t*)(address+1)) = ((uint32_t)pfnFunc) - address - 5;
-	}
-
 	void InstallDiagonalStreetsPatch()
 	{
 		Logger& logger = Logger::GetInstance();
 
 		try
 		{
-			OverwriteMemory((void*)0x637f80, 0xeb);
-			OverwriteMemory((void*)0x63aff2, 0xeb);
+			Patching::OverwriteMemory((void*)0x637f80, 0xeb);
+			Patching::OverwriteMemory((void*)0x63aff2, 0xeb);
 
 			logger.WriteLine(
 				LogLevel::Info,
@@ -130,7 +108,7 @@ namespace
 
 		try
 		{
-			OverwriteMemory((void*)0x729fff, 0x00);
+			Patching::OverwriteMemory((void*)0x729fff, 0x00);
 
 			logger.WriteLine(
 				LogLevel::Info,
@@ -216,7 +194,7 @@ noMatchingTunnelNetwork:
 				default:
 					return;
 			}
-			InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
+			Patching::InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
 
 			logger.WriteLine(
 				LogLevel::Info,
