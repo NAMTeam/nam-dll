@@ -42,6 +42,7 @@
 #include "wil/resource.h"
 #include "wil/win32_helpers.h"
 #include "Patching.h"
+#include "Rul2Engine.h"
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
@@ -212,10 +213,10 @@ noMatchingTunnelNetwork:
 	void InstallMemoryPatches(const uint16_t gameVersion)
 	{
 		// Patch the game's memory to enable a few NAM features.
-		// These patches were all developed by memo.
 		InstallDiagonalStreetsPatch();
 		InstallDisableAutoconnectForStreetsPatch();
 		InstallTunnelsPatch(gameVersion);
+		Rul2Engine::Install();
 	}
 }
 
