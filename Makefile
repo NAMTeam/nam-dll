@@ -9,11 +9,11 @@
 #
 #   ./xwin-0.5.0-x86_64-unknown-linux-musl/xwin --accept-license --arch x86 splat --output ./vendor/xwin
 #
-# Download the header library WIL from https://github.com/microsoft/wil/releases
-# and extract it to `./vendor/wil`.
-# 7zip is able to extract .nupkg archives.
+# To compile the DLL using the below commands, run:
 #
-# Run `make` to compile the DLL using the below commands.
+#   git submodule update --init
+#   make
+
 
 compile:
 	cd src && \
@@ -24,9 +24,9 @@ compile:
 		/D "_WIN32" /D "NDEBUG" /D "_UNICODE" /D "UNICODE" \
 		/D "_USRDLL" /D "_WINDLL" \
 		/imsvc ../vendor/xwin/crt/include /imsvc ../vendor/xwin/sdk/include/ucrt /imsvc ../vendor/xwin/sdk/include/um /imsvc ../vendor/xwin/sdk/include/shared \
-		/I ../vendor/gzcom-dll/include \
+		/I ../vendor/gzcom-dll/gzcom-dll/include \
 		/I ../vendor/wil/include \
-		/o NAM.dll ./*.cpp ../vendor/gzcom-dll/src/* \
+		/o NAM.dll ./*.cpp ../vendor/gzcom-dll/gzcom-dll/src/{cRZCOMDllDirector,cRZBaseString}.cpp \
 		/link /libpath:../vendor/xwin/crt/lib/x86 /libpath:../vendor/xwin/sdk/lib/um/x86 /libpath:../vendor/xwin/sdk/lib/ucrt/x86 \
 		version.lib ole32.lib
 #

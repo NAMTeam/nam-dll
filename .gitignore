@@ -1,5 +1,4 @@
-/vendor/wil/
-/vendor/xwin/
+/vendor/xwin
 NAM.dll
 NAM.lib
 *.zip
