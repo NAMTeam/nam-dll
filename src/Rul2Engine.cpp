@@ -15,6 +15,8 @@
 #include <array>
 #include <algorithm>
 #include "cSC4NetworkTileConflictRule.h"
+#include <unordered_set>
+#include "RuleEquivalence.h"
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
@@ -96,35 +98,81 @@ namespace
 
 	constexpr int32_t maxRepetitions = 100;
 
-	OverrideRuleNode* const sTileConflictRules = *(reinterpret_cast<OverrideRuleNode**>(0xb466d0));
+	// OverrideRuleNode* const sTileConflictRules = *(reinterpret_cast<OverrideRuleNode**>(0xb466d0));
+	std::unordered_set<cSC4NetworkTileConflictRule, RuleEquivalenceHash, RuleEquivalence> sTileConflictRules2 = {};
 
 	enum Rul2PatchResult : uint32_t { NoMatch, Matched, Prevent };
 	typedef Rul2PatchResult (__thiscall* pfn_cSC4NetworkTool_PatchTilePair)(cSC4NetworkTool* pThis, MultiMapRange const& range, tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir);
 	pfn_cSC4NetworkTool_PatchTilePair PatchTilePair = reinterpret_cast<pfn_cSC4NetworkTool_PatchTilePair>(0x6337e0);
 
-	// equal range of multi map
-	void tileConflictRulesForId(uint32_t id, MultiMapRange& range)
+	void addRuleOverride(cSC4NetworkTileConflictRule* rule) {
+		sTileConflictRules2.insert(*rule);
+	}
+
+	// Lookup an override rule matching the two tiles and apply it if it exists.
+	Rul2PatchResult PatchTilePair2(tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir)
 	{
-		range.last = sTileConflictRules;
-		OverrideRuleNode* node = sTileConflictRules->next;
-		while (node) {
-			if (id < node->lookupId1) {
-				range.last = node;
-				node = node->childLeft;
+		// First we need to convert the absolute rotations of cell1 and cell2 to the relative rotations of RUL2:
+		// dir = 0 (cell2 is west of cell1)
+		// dir = 1 (cell2 is north of cell1)
+		// dir = 2 (cell2 is east of cell1) (this is the case we usually think of when writing RUL2)
+		// dir = 3 (cell2 is south of cell1)
+		cSC4NetworkTileConflictRule dummy = {cell1.id, rotate(cell1.rf, 6-dir), cell2.id, rotate(cell2.rf, 6-dir)};  // tile 3 and 4 uninitialized
+		const auto pRule = sTileConflictRules2.find(dummy);
+		if (pRule == sTileConflictRules2.end()) {
+			return NoMatch;
+		} else if (pRule->_3.id == 0) {
+			return Prevent;
+		} else {
+			const cSC4NetworkTileConflictRule& rule = *pRule;
+			Tile& a = dummy._1;
+			Tile& b = dummy._2;
+			// Here we check not only `a.rf` but also `b.rf` as this could be relevant if `a.id == b.id`.
+			// If `b.id == 0`, its rotation does not matter, which is used for overriding tiles adjacent to bridges for example.
+			if (a.id == rule._1.id && a.rf == rule._1.rf && (b.rf == rule._2.rf || b.id == 0)) {
+				// case R0F0
+				cell1.id = rule._3.id; cell1.rf = rotate(rule._3.rf, 2+dir);
+				cell2.id = rule._4.id; cell2.rf = rotate(rule._4.rf, 2+dir);
+				return Matched;
+			} else if (a.id == rule._1.id && a.rf == flipVertically(rule._1.rf) && (b.rf == flipVertically(rule._2.rf) || b.id == 0)) {
+				// case R2F1
+				cell1.id = rule._3.id; cell1.rf = rotate(flipVertically(rule._3.rf), 2+dir);
+				cell2.id = rule._4.id; cell2.rf = rotate(flipVertically(rule._4.rf), 2+dir);
+				return Matched;
+			} else if (a.id == rule._2.id && a.rf == rotate180(rule._2.rf) && (b.rf == rotate180(rule._1.rf) || b.id == 0)) {
+				// case R2F0
+				cell1.id = rule._4.id; cell1.rf = rotate(rule._4.rf, dir);
+				cell2.id = rule._3.id; cell2.rf = rotate(rule._3.rf, dir);
+				return Matched;
+			} else if (a.id == rule._2.id && a.rf == flipHorizontally(rule._2.rf) && (b.rf == flipHorizontally(rule._1.rf) || b.id == 0)) {
+				// case R0F1
+				cell1.id = rule._4.id; cell1.rf = rotate(flipHorizontally(rule._4.rf), 2+dir);
+				cell2.id = rule._3.id; cell2.rf = rotate(flipHorizontally(rule._3.rf), 2+dir);
+				return Matched;
 			} else {
-				node = node->childRight;
+				return NoMatch;  // should not happen
 			}
 		}
+	}
 
-		range.first = sTileConflictRules;
-		node = sTileConflictRules->next;
-		while (node) {
-			if (id <= node->lookupId1) {
-				range.first = node;
-				node = node->childLeft;
-			} else {
-				node = node->childRight;
-			}
+	constexpr uint32_t AddRuleOverrides_InjectPoint = 0x63d316;
+	constexpr uint32_t AddRuleOverrides_Return = 0x63d33c;
+
+	void NAKED_FUN Hook_AddRuleOverrides(void)
+	{
+		__asm {
+			push eax;  // store
+			push ecx;  // store
+			push edx;  // store
+			lea edx, [esp + 0x28 + 0xc];  // rule
+			push edx;  // rule
+			call addRuleOverride;  // (cdecl)
+			add esp, 0x4;
+			pop edx;  // restore
+			pop ecx;  // restore
+			pop eax;  // restore
+			push AddRuleOverrides_Return;
+			ret;
 		}
 	}
 
@@ -142,48 +190,39 @@ namespace
 	// Try to find a surrogate tile that fits between the two tiles with two suitable override rules.
 	// The override is then applied from the first to the last tile.
 	// This avoids the need for direct adjacencies between the two tiles.
-	Rul2PatchResult tryAdjacencies(cSC4NetworkTool* networkTool, tSolvedCell& cell0, tSolvedCell& cell2, MultiMapRange const& range0, MultiMapRange const& range2, int8_t dir)
+	Rul2PatchResult tryAdjacencies(tSolvedCell& cell0, tSolvedCell& cell2, int8_t dir)
 	{
 		for (auto&& surrogate : adjacencySurrogateTiles) {
-			tSolvedCell t0 = cell0;
-			tSolvedCell t2 = cell2;
-			tSolvedCell t1 = {surrogate.id, rotate(surrogate.rf, 6-dir), 0};
-			MultiMapRange range1;
+			tSolvedCell x = cell0;
+			tSolvedCell y = {surrogate.id, rotate(surrogate.rf, 2+dir), 0};
+			tSolvedCell z = cell2;
 
-			Rul2PatchResult result = PatchTilePair(networkTool, range0, t0, t1, dir);  // non-swapped
+			Rul2PatchResult result = PatchTilePair2(x, y, dir);
 			if (result != Matched) {
-				tileConflictRulesForId(t1.id, range1);
-				result = PatchTilePair(networkTool, range1, t1, t0, (dir+2) & 0x3);  // swapped
-				if (result != Matched) {
-					continue;  // next surrogate tile
-				}
+				continue;  // next surrogate tile
 			}
-			// result == Matched, and t0 and t1 have potentially been modifed
-			if (t0.id != cell0.id || t0.rf != cell0.rf ||  // t0 must remain unchanged for a proper adjacency
-				t0.id == t1.id) {  // t0 must not be an orthogonal override network
-				// TODO also check that t1 has changed?
+			// result == Matched, and x and y have potentially been modifed
+			if (x.id != cell0.id || x.rf != cell0.rf ||  // x must remain unchanged for a proper adjacency
+				x.id == y.id) {  // x must not be an orthogonal override network
+				// TODO also check that y has changed?
 				continue;
 			}
-			uint32_t id1New = t1.id;
-			RotFlip rf1New = t1.rf;
+			auto yIdNew = y.id;
+			auto yRfNew = y.rf;
 
-			tileConflictRulesForId(t1.id, range1);
-			result = PatchTilePair(networkTool, range1, t1, t2, dir);  // non-swapped
+			result = PatchTilePair2(y, z, dir);
 			if (result != Matched) {
-				result = PatchTilePair(networkTool, range2, t2, t1, (dir+2) & 0x3);  // swapped
-				if (result != Matched) {
-					continue;  // next surrogate tile
-				}
+				continue;  // next surrogate tile
 			}
-			// result == Matched, and t1 and t2 have potentially been modified
-			if (t1.id != id1New || t1.rf != rf1New ||  //  t1 must remain unchanged (in 2nd override) for a proper adjacency
-				t1.id == t2.id ||  // t2 must not be an orthogonal override network
-				t2.id == cell2.id && t2.rf == cell2.rf) {  // t2 must change (in 2nd override) for a proper adjacency
+			// result == Matched, and y and z have potentially been modified
+			if (y.id != yIdNew || y.rf != yRfNew ||  //  y must remain unchanged (in 2nd override) for a proper adjacency
+				y.id == z.id ||  // z must not be an orthogonal override network
+				z.id == cell2.id && z.rf == cell2.rf) {  // z must change (in 2nd override) for a proper adjacency
 				continue;
 			}
 
-			cell0 = t0;
-			cell2 = t2;
+			cell0 = x;
+			cell2 = z;
 			return Matched;
 		}
 		return NoMatch;
@@ -191,9 +230,9 @@ namespace
 
 	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, eastl::vector<tSolvedCell>& cellsBuffer)
 	{
-		if (sTileConflictRules == nullptr) {
-			return true;  // success as RUL2 file was not yet loaded
-		}
+		// if (sTileConflictRules == nullptr) {
+		// 	return true;  // success as RUL2 file was not yet loaded
+		// }
 
 		int32_t countMatchesDown = cellsBuffer.size() * 8;  // 4 directions * {non-swapped,swapped}
 		if (countMatchesDown <= maxRepetitions) {
@@ -209,17 +248,14 @@ namespace
 		int32_t countPatchesCurrentCell = 0;
 		while (true) {
 mainLoop:
-			MultiMapRange range;
-			tileConflictRulesForId(cell->id, range);
-
 			if (countPatchesCurrentCell <= maxRepetitions) {
 				for (uint32_t dir = 0; dir < 4; dir++) {
 					uint32_t z = cell->xz >> 16;
 					uint32_t x = cell->xz & 0xffff;
 					uint32_t nextCellXZ = (kNextZ[dir] + z) * 0x10000 + (kNextX[dir] + x);
 
-					cSC4NetworkCellInfo* cellInfo = GetCell(&(networkTool->networkWorldCache), nextCellXZ);
-					if (cellInfo == nullptr) {
+					cSC4NetworkCellInfo* cell2Info = GetCell(&(networkTool->networkWorldCache), nextCellXZ);
+					if (cell2Info == nullptr) {
 						continue;  // next direction
 					}
 
@@ -227,8 +263,8 @@ mainLoop:
 					tSolvedCell* cell2 = nullptr;
 					bool isCell2StackLocal = false;
 
-					if (cellInfo->idxInCellsBuffer < 0) {
-						cISC4NetworkOccupant* networkOccupant = cellInfo->networkOccupant;
+					if (cell2Info->idxInCellsBuffer < 0) {
+						cISC4NetworkOccupant* networkOccupant = cell2Info->networkOccupant;
 						if (networkOccupant == nullptr) {
 							continue;  // next direction
 						}
@@ -238,14 +274,14 @@ mainLoop:
 						temp.rf = static_cast<RotFlip>(networkOccupant->GetRotationAndFlip());
 						isCell2StackLocal = true;
 					} else {
-						cell2 = &(cellsBuffer[cellInfo->idxInCellsBuffer]);
+						cell2 = &(cellsBuffer[cell2Info->idxInCellsBuffer]);
 						if (cell2 == nullptr) {
 							continue;  // next direction
 						}
 					}
 					// now cell2 is not nullptr
 
-					if (cellInfo->isImmovable || cellInfo->isNetworkLot) {
+					if (cell2Info->isImmovable || cell2Info->isNetworkLot) {
 						if (!isCell2StackLocal) {
 							temp = *cell2;
 							cell2 = &temp;
@@ -258,23 +294,16 @@ mainLoop:
 						continue;  // next direction
 					}
 
-					Rul2PatchResult patchResult = PatchTilePair(networkTool, range, *cell, *cell2, dir);  // non-swapped evaluation
+					Rul2PatchResult patchResult = PatchTilePair2(*cell, *cell2, dir);
 
 					if (patchResult == NoMatch) {
-						MultiMapRange range2;
-						tileConflictRulesForId(cell2->id, range2);
-						if (isCell2StackLocal) {  // otherwise, cell2 is queued in buffer, so we will eventually process it from cell2's point of view anyway
-							patchResult = PatchTilePair(networkTool, range2, *cell2, *cell, (dir - 2) & 3);  // swapped evaluation
-						}
-						if (patchResult == NoMatch) {
-							patchResult = tryAdjacencies(networkTool, *cell, *cell2, range, range2, dir);  // cell -> surrogate -> cell2
-							if (patchResult != Matched) {  // potential Prevents from adjacencies are discarded
-								if (isCell2StackLocal) {
-									patchResult = tryAdjacencies(networkTool, *cell2, *cell, range2, range, (dir - 2) & 3);  // cell2 -> surrogate -> cell
-								}
-								if (patchResult != Matched) {
-									continue;  // next direction
-								}
+						patchResult = tryAdjacencies(*cell, *cell2, dir);  // cell -> surrogate -> cell2
+						if (patchResult != Matched) {  // potential Prevents from adjacencies are discarded
+							if (isCell2StackLocal) {  // otherwise, cell2 is queued in buffer, so we will eventually process it from cell2's point of view anyway
+								patchResult = tryAdjacencies(*cell2, *cell, (dir - 2) & 3);  // cell2 -> surrogate -> cell
+							}
+							if (patchResult != Matched) {
+								continue;  // next direction
 							}
 						}
 					}
@@ -293,7 +322,7 @@ mainLoop:
 
 					if (isCell2StackLocal) {  // cell is not in buffer
 						uint32_t idx = cell - &(cellsBuffer.front());
-						cellInfo->idxInCellsBuffer = cellsBuffer.size();
+						cell2Info->idxInCellsBuffer = cellsBuffer.size();
 						cellsBuffer.push_back(*cell2);
 						cell = &(cellsBuffer[idx]);  // push_back might have triggered reallocation of the cells, so we retrieve the current address again
 					}
@@ -364,5 +393,7 @@ void Rul2Engine::Install()
 	// 	std::cout << "RotFlip sanity check failed.\n";
 	// }
 
+	// sTileConflictRules2.reserve(4500 * 1000);  // TODO
 	Patching::InstallHook(AdjustTileSubsets_InjectPoint, Hook_AdjustTileSubsets);
+	Patching::InstallHook(AddRuleOverrides_InjectPoint, Hook_AddRuleOverrides);
 }
