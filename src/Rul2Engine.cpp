@@ -11,6 +11,8 @@
 #include "wil/win32_helpers.h"
 #include "EASTLConfigSC4.h"
 #include "EASTL/vector.h"
+#include <array>
+#include <algorithm>
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
@@ -19,6 +21,16 @@
 #endif
 
 enum RotFlip : uint8_t { R0F0 = 0, R1F0 = 1, R2F0 = 2, R3F0 = 3, R0F1 = 0x80, R1F1 = 0x81, R2F1 = 0x82, R3F1 = 0x83 };
+
+RotFlip rotate(RotFlip x, uint32_t rotation)
+{
+	return static_cast<RotFlip>((x + (0x1 | (x >> 6)) * (rotation & 0x3)) & 0x83);
+}
+
+RotFlip operator*(RotFlip x, RotFlip y)
+{
+	return static_cast<RotFlip>(rotate(x, y) ^ (y & 0x80));
+}
 
 struct Tile
 {
@@ -35,6 +47,11 @@ struct tSolvedCell
 };
 static_assert(sizeof(tSolvedCell) == 0xc);
 static_assert(offsetof(tSolvedCell, xz) == 0x8);
+
+std::ostream& operator<<(std::ostream& os, const tSolvedCell& t)
+{
+    return os << "0x" << std::hex << t.id << "," << (t.rf & 0xff) << ":(" << (t.xz & 0xffff) << "," << (t.xz >> 16) << ")";
+}
 
 class cSC4NetworkCellInfo
 {
@@ -283,5 +300,27 @@ mainLoop:
 
 void Rul2Engine::Install()
 {
+	// sanity check
+	// const std::array<RotFlip, 8> rotFlipValues = {R0F0, R1F0, R2F0, R3F0, R0F1, R3F1, R2F1, R1F1};
+	// const std::array<int, 8> rotFlipIndexes = {0,1,2,3,4,5,6,7};
+	// const int multiplicationTable[8][8] = {
+	// 	{0,1,2,3,4,5,6,7},
+	// 	{1,2,3,0,7,4,5,6},
+	// 	{2,3,0,1,6,7,4,5},
+	// 	{3,0,1,2,5,6,7,4},
+	// 	{4,5,6,7,0,1,2,3},
+	// 	{5,6,7,4,3,0,1,2},
+	// 	{6,7,4,5,2,3,0,1},
+	// 	{7,4,5,6,1,2,3,0}
+	// };
+	// bool passed = std::all_of(rotFlipIndexes.cbegin(), rotFlipIndexes.cend(), [&rotFlipValues, &rotFlipIndexes, &multiplicationTable](int i) {
+	// 	return std::all_of(rotFlipIndexes.cbegin(), rotFlipIndexes.cend(), [&rotFlipValues, &multiplicationTable, &i](int j) {
+	// 		return rotFlipValues[i] * rotFlipValues[j] == rotFlipValues[multiplicationTable[i][j]];
+	// 	});
+	// });
+	// if (!passed) {
+	// 	std::cout << "RotFlip sanity check failed.\n";
+	// }
+
 	Patching::InstallHook(AdjustTileSubsets_InjectPoint, Hook_AdjustTileSubsets);
 }
