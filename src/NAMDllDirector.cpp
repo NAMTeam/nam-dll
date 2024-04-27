@@ -212,11 +212,19 @@ noMatchingTunnelNetwork:
 
 	void InstallMemoryPatches(const uint16_t gameVersion)
 	{
+		Logger& logger = Logger::GetInstance();
 		// Patch the game's memory to enable a few NAM features.
 		InstallDiagonalStreetsPatch();
 		InstallDisableAutoconnectForStreetsPatch();
 		InstallTunnelsPatch(gameVersion);
-		Rul2Engine::Install();
+		try {
+			Rul2Engine::Install();
+			logger.WriteLine(LogLevel::Info, "Installed the RUL2 Engine patch.");
+		}
+		catch (const wil::ResultException& e)
+		{
+			logger.WriteLineFormatted(LogLevel::Error, "Failed to install the RUL2 Engine patch.\n%s", e.what());
+		}
 	}
 }
 

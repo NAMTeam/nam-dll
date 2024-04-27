@@ -11,6 +11,7 @@
 #include "wil/win32_helpers.h"
 #include "EASTLConfigSC4.h"
 #include "EASTL/vector.h"
+#include <vector>
 #include <array>
 #include <algorithm>
 
@@ -154,6 +155,62 @@ namespace
 		}
 	}
 
+	const std::vector<Tile> adjacencySurrogateTiles = {
+		{0x00004B00, R1F0}, {0x00004B00, R3F0},  // Road
+		{0x57000000, R1F0}, {0x57000000, R3F0},  // Dirtroad
+		{0x05004B00, R1F0}, {0x05004B00, R3F0},  // Street
+		{0x5D540000, R1F0}, {0x5D540000, R3F0},  // Rail
+		{0x08031500, R1F0}, {0x08031500, R3F0},  // Lightrail
+		{0x09004B00, R1F0}, {0x09004B00, R3F0},  // Onewayroad  (TODO or 0x5f940300?)
+		{0x04006100, R3F0}, {0x04006100, R1F0},  // Avenue
+		{0x0D031500, R1F0}, {0x0D031500, R3F0},  // Monorail
+	};
+
+	// Try to find a surrogate tile that fits between the two tiles with two suitable override rules.
+	// The override is then applied from the first to the last tile.
+	// This avoids the need for direct adjacencies between the two tiles.
+	Rul2PatchResult tryAdjacencies(cSC4NetworkTool* networkTool, tSolvedCell& cell0, tSolvedCell& cell2, MultiMapRange const& range0, MultiMapRange const& range2, int8_t dir)
+	{
+		for (auto&& surrogate : adjacencySurrogateTiles) {
+			tSolvedCell t0 = cell0;
+			tSolvedCell t2 = cell2;
+			tSolvedCell t1 = {surrogate.id, rotate(surrogate.rf, 6-dir), 0};
+			MultiMapRange range1;
+
+			Rul2PatchResult result = PatchTilePair(networkTool, range0, t0, t1, dir);  // non-swapped
+			if (result != Matched) {
+				tileConflictRulesForId(t1.id, range1);
+				result = PatchTilePair(networkTool, range1, t1, t0, (dir+2) & 0x3);  // swapped
+				if (result != Matched) {
+					continue;  // next surrogate tile
+				}
+			}
+			// result == Matched, and t0 and t1 have potentially been modifed
+			if (t0.id != cell0.id) {  // not a proper adjacency
+				continue;
+			}
+			uint32_t id1New = t1.id;
+
+			tileConflictRulesForId(t1.id, range1);
+			result = PatchTilePair(networkTool, range1, t1, t2, dir);  // non-swapped
+			if (result != Matched) {
+				result = PatchTilePair(networkTool, range2, t2, t1, (dir+2) & 0x3);  // swapped
+				if (result != Matched) {
+					continue;  // next surrogate tile
+				}
+			}
+			// result == Matched, and t1 and t2 have potentially been modified
+			if (t1.id != id1New || t2.id == cell2.id && t2.rf == cell2.rf) {  // not a proper adjacency
+				continue;
+			}
+
+			cell0 = t0;
+			cell2 = t2;
+			return Matched;
+		}
+		return NoMatch;
+	}
+
 	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, eastl::vector<tSolvedCell>& cellsBuffer)
 	{
 		if (sTileConflictRules == nullptr) {
@@ -226,14 +283,21 @@ mainLoop:
 					Rul2PatchResult patchResult = PatchTilePair(networkTool, range, *cell, *cell2, dir);  // non-swapped evaluation
 
 					if (patchResult == NoMatch) {
-						if (!isCell2StackLocal) {  // if cell2 is not new and hence is queued in buffer, we will process it from cell2's point of view anyway
-							continue;  // next direction
+						MultiMapRange range2;
+						tileConflictRulesForId(cell2->id, range2);
+						if (isCell2StackLocal) {  // otherwise, cell2 is queued in buffer, so we will eventually process it from cell2's point of view anyway
+							patchResult = PatchTilePair(networkTool, range2, *cell2, *cell, (dir - 2) & 3);  // swapped evaluation
 						}
-						MultiMapRange rangeSwapped;
-						tileConflictRulesForId(cell2->id, rangeSwapped);
-						patchResult = PatchTilePair(networkTool, rangeSwapped, *cell2, *cell, (dir - 2) & 3);  // swapped evaluation
 						if (patchResult == NoMatch) {
-							continue;  // next direction
+							patchResult = tryAdjacencies(networkTool, *cell, *cell2, range, range2, dir);  // cell -> surrogate -> cell2
+							if (patchResult != Matched) {  // potential Prevents from adjacencies are discarded
+								if (isCell2StackLocal) {
+									patchResult = tryAdjacencies(networkTool, *cell2, *cell, range2, range, (dir - 2) & 3);  // cell2 -> surrogate -> cell
+								}
+								if (patchResult != Matched) {
+									continue;  // next direction
+								}
+							}
 						}
 					}
 
