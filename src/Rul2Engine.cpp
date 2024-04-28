@@ -186,10 +186,13 @@ namespace
 				}
 			}
 			// result == Matched, and t0 and t1 have potentially been modifed
-			if (t0.id != cell0.id) {  // not a proper adjacency
+			if (t0.id != cell0.id || t0.rf != cell0.rf ||  // t0 must remain unchanged for a proper adjacency
+				t0.id == t1.id) {  // t0 must not be an orthogonal override network
+				// TODO also check that t1 has changed?
 				continue;
 			}
 			uint32_t id1New = t1.id;
+			RotFlip rf1New = t1.rf;
 
 			tileConflictRulesForId(t1.id, range1);
 			result = PatchTilePair(networkTool, range1, t1, t2, dir);  // non-swapped
@@ -200,7 +203,9 @@ namespace
 				}
 			}
 			// result == Matched, and t1 and t2 have potentially been modified
-			if (t1.id != id1New || t2.id == cell2.id && t2.rf == cell2.rf) {  // not a proper adjacency
+			if (t1.id != id1New || t1.rf != rf1New ||  //  t1 must remain unchanged (in 2nd override) for a proper adjacency
+				t1.id == t2.id ||  // t2 must not be an orthogonal override network
+				t2.id == cell2.id && t2.rf == cell2.rf) {  // t2 must change (in 2nd override) for a proper adjacency
 				continue;
 			}
 
