@@ -14,31 +14,13 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include "cSC4NetworkTileConflictRule.h"
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
 #else
 #define NAKED_FUN __declspec(naked)
 #endif
-
-enum RotFlip : uint8_t { R0F0 = 0, R1F0 = 1, R2F0 = 2, R3F0 = 3, R0F1 = 0x80, R1F1 = 0x81, R2F1 = 0x82, R3F1 = 0x83 };
-
-RotFlip rotate(RotFlip x, uint32_t rotation)
-{
-	return static_cast<RotFlip>((x + (0x1 | (x >> 6)) * (rotation & 0x3)) & 0x83);
-}
-
-RotFlip operator*(RotFlip x, RotFlip y)
-{
-	return static_cast<RotFlip>(rotate(x, y) ^ (y & 0x80));
-}
-
-struct Tile
-{
-	uint32_t id;
-	RotFlip rf;
-};
-static_assert(sizeof(Tile) == 0x8);
 
 struct tSolvedCell
 {
@@ -90,15 +72,6 @@ class cSC4NetworkTool
 		cSC4NetworkWorldCache networkWorldCache;
 };
 static_assert(offsetof(cSC4NetworkTool, networkWorldCache) == 0x1c);
-
-struct cSC4NetworkTileConflictRule
-{
-	Tile _1;
-	Tile _2;
-	Tile _3;
-	Tile _4;
-};
-static_assert(sizeof(cSC4NetworkTileConflictRule) == 32);
 
 struct OverrideRuleNode
 {
