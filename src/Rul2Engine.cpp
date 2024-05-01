@@ -117,7 +117,7 @@ namespace
 		// dir = 1 (cell2 is north of cell1)
 		// dir = 2 (cell2 is east of cell1) (this is the case we usually think of when writing RUL2)
 		// dir = 3 (cell2 is south of cell1)
-		cSC4NetworkTileConflictRule dummy = {cell1.id, rotate(cell1.rf, 6-dir), cell2.id, rotate(cell2.rf, 6-dir)};  // tile 3 and 4 uninitialized
+		cSC4NetworkTileConflictRule dummy = {cell1.id, absoluteToRelative(cell1.rf, dir), cell2.id, absoluteToRelative(cell2.rf, dir)};  // tile 3 and 4 uninitialized
 		const auto pRule = sTileConflictRules2.find(dummy);
 		if (pRule == sTileConflictRules2.end()) {
 			return NoMatch;
@@ -131,23 +131,23 @@ namespace
 			// If `b.id == 0`, its rotation does not matter, which is used for overriding tiles adjacent to bridges for example.
 			if (a.id == rule._1.id && a.rf == rule._1.rf && (b.rf == rule._2.rf || b.id == 0)) {
 				// case R0F0
-				cell1.id = rule._3.id; cell1.rf = rotate(rule._3.rf, 2+dir);
-				cell2.id = rule._4.id; cell2.rf = rotate(rule._4.rf, 2+dir);
+				cell1.id = rule._3.id; cell1.rf = relativeToAbsolute(rule._3.rf, dir);
+				cell2.id = rule._4.id; cell2.rf = relativeToAbsolute(rule._4.rf, dir);
 				return Matched;
 			} else if (a.id == rule._1.id && a.rf == flipVertically(rule._1.rf) && (b.rf == flipVertically(rule._2.rf) || b.id == 0)) {
 				// case R2F1
-				cell1.id = rule._3.id; cell1.rf = rotate(flipVertically(rule._3.rf), 2+dir);
-				cell2.id = rule._4.id; cell2.rf = rotate(flipVertically(rule._4.rf), 2+dir);
+				cell1.id = rule._3.id; cell1.rf = relativeToAbsolute(flipVertically(rule._3.rf), dir);
+				cell2.id = rule._4.id; cell2.rf = relativeToAbsolute(flipVertically(rule._4.rf), dir);
 				return Matched;
 			} else if (a.id == rule._2.id && a.rf == rotate180(rule._2.rf) && (b.rf == rotate180(rule._1.rf) || b.id == 0)) {
 				// case R2F0
-				cell1.id = rule._4.id; cell1.rf = rotate(rule._4.rf, dir);
-				cell2.id = rule._3.id; cell2.rf = rotate(rule._3.rf, dir);
+				cell1.id = rule._4.id; cell1.rf = relativeToAbsolute(rotate180(rule._4.rf), dir);
+				cell2.id = rule._3.id; cell2.rf = relativeToAbsolute(rotate180(rule._3.rf), dir);
 				return Matched;
 			} else if (a.id == rule._2.id && a.rf == flipHorizontally(rule._2.rf) && (b.rf == flipHorizontally(rule._1.rf) || b.id == 0)) {
 				// case R0F1
-				cell1.id = rule._4.id; cell1.rf = rotate(flipHorizontally(rule._4.rf), 2+dir);
-				cell2.id = rule._3.id; cell2.rf = rotate(flipHorizontally(rule._3.rf), 2+dir);
+				cell1.id = rule._4.id; cell1.rf = relativeToAbsolute(flipHorizontally(rule._4.rf), dir);
+				cell2.id = rule._3.id; cell2.rf = relativeToAbsolute(flipHorizontally(rule._3.rf), dir);
 				return Matched;
 			} else {
 				return NoMatch;  // should not happen
@@ -194,7 +194,7 @@ namespace
 	{
 		for (auto&& surrogate : adjacencySurrogateTiles) {
 			tSolvedCell x = cell0;
-			tSolvedCell y = {surrogate.id, rotate(surrogate.rf, 2+dir), 0};
+			tSolvedCell y = {surrogate.id, relativeToAbsolute(surrogate.rf, dir), 0};
 			tSolvedCell z = cell2;
 
 			Rul2PatchResult result = PatchTilePair2(x, y, dir);

@@ -8,6 +8,16 @@ static constexpr RotFlip rotate(RotFlip x, uint32_t rotation)
 	return static_cast<RotFlip>((x + (0x1 | (x >> 6)) * (rotation & 0x3)) & 0x83);
 }
 
+static constexpr RotFlip relativeToAbsolute(RotFlip rf, uint32_t dir)
+{
+	return rotate(rf, 2+dir);
+}
+
+static constexpr RotFlip absoluteToRelative(RotFlip rf, uint32_t dir)
+{
+	return rotate(rf, 6-dir);
+}
+
 static constexpr RotFlip operator*(RotFlip x, RotFlip y)
 {
 	return static_cast<RotFlip>(rotate(x, y) ^ (y & 0x80));
