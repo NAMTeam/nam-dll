@@ -17,6 +17,7 @@
 #include "cSC4NetworkTileConflictRule.h"
 #include <unordered_set>
 #include "RuleEquivalence.h"
+#include <utility>
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
@@ -176,55 +177,102 @@ namespace
 		}
 	}
 
-	const std::vector<Tile> adjacencySurrogateTiles = {
-		{0x00004B00, R1F0}, {0x00004B00, R3F0},  // Road
-		{0x57000000, R1F0}, {0x57000000, R3F0},  // Dirtroad
-		{0x05004B00, R1F0}, {0x05004B00, R3F0},  // Street
-		{0x5D540000, R1F0}, {0x5D540000, R3F0},  // Rail
-		{0x08031500, R1F0}, {0x08031500, R3F0},  // Lightrail
-		{0x09004B00, R1F0}, {0x09004B00, R3F0},  // Onewayroad  (TODO or 0x5f940300?)
-		{0x04006100, R3F0}, {0x04006100, R1F0},  // Avenue
-		{0x0D031500, R1F0}, {0x0D031500, R3F0},  // Monorail
+	const std::vector<Tile> orthogonalSurrogateTiles = {
+		{0x00004B00, R1F0},  // Road
+		{0x57000000, R1F0},  // Dirtroad
+		{0x05004B00, R1F0},  // Street
+		{0x5D540000, R1F0},  // Rail
+		{0x08031500, R1F0},  // Lightrail
+		{0x09004B00, R1F0},  // Onewayroad  (TODO or 0x5f940300?)
+		{0x04006100, R1F0},  // Avenue
+		{0x0D031500, R1F0},  // Monorail
+	};
+
+	const std::vector<std::pair<Tile, Tile>> diagonalSurrogateTiles = {  // diagonals in west-south direction on first tile, north-east on second tile
+		std::make_pair<Tile, Tile>({0x00000A00, R1F0}, {0x00000A00, R3F0}),  // Road
+		std::make_pair<Tile, Tile>({0x57000200, R1F0}, {0x57000200, R3F0}),  // Dirtroad
+		std::make_pair<Tile, Tile>({0x5F500200, R1F0}, {0x5F500200, R3F0}),  // Street
+		std::make_pair<Tile, Tile>({0x5D540100, R1F0}, {0x5D540100, R3F0}),  // Rail
+		std::make_pair<Tile, Tile>({0x08001A00, R1F0}, {0x08001A00, R3F0}),  // Lightrail
+		std::make_pair<Tile, Tile>({0x09000A00, R1F0}, {0x09000A00, R3F0}),  // Onewayroad  (TODO or 0x5f94....?)
+		std::make_pair<Tile, Tile>({0x04000200, R2F0}, {0x04003800, R0F0}),  // Avenue~SW | Avenue~SharedDiagLeft (we don't need 0x04003800,R2F0 as this duplication should already be part of the RUL2 file)
+		std::make_pair<Tile, Tile>({0x04003800, R0F0}, {0x04000200, R0F0}),  // Avenue~SharedDiagLeft | Avenue~SW
+		std::make_pair<Tile, Tile>({0x0D001A00, R1F0}, {0x0D001A00, R3F0}),  // Monorail
 	};
 
 	// Try to find a surrogate tile that fits between the two tiles with two suitable override rules.
 	// The override is then applied from the first to the last tile.
 	// This avoids the need for direct adjacencies between the two tiles.
-	Rul2PatchResult tryAdjacencies(tSolvedCell& cell0, tSolvedCell& cell2, int8_t dir)
+	// For diagonals, this employs two surrogate tiles instead of one.
+	Rul2PatchResult tryAdjacencies(tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir)
 	{
-		for (auto&& surrogate : adjacencySurrogateTiles) {
-			tSolvedCell x = cell0;
-			tSolvedCell y = {surrogate.id, relativeToAbsolute(surrogate.rf, dir), 0};
-			tSolvedCell z = cell2;
+		for (auto&& surrogate : orthogonalSurrogateTiles) {
+			for (auto&& opposite : {false, true}) {
+				tSolvedCell a = cell1;
+				tSolvedCell b = {surrogate.id, relativeToAbsolute(surrogate.rf, opposite ? dir+2 : dir), 0xffffffff};
+				tSolvedCell c = cell2;
 
-			Rul2PatchResult result = PatchTilePair2(x, y, dir);
-			if (result != Matched) {
-				continue;  // next surrogate tile
-			}
-			// result == Matched, and x and y have potentially been modifed
-			if (x.id != cell0.id || x.rf != cell0.rf ||  // x must remain unchanged for a proper adjacency
-				x.id == y.id) {  // x must not be an orthogonal override network
-				// TODO also check that y has changed?
-				continue;
-			}
-			auto yIdNew = y.id;
-			auto yRfNew = y.rf;
+				Rul2PatchResult result = PatchTilePair2(a, b, dir);
+				if (result != Matched ||
+					a.id != cell1.id || a.rf != cell1.rf ||  // a must remain unchanged for a proper adjacency
+					a.id == b.id) {  // a must not be an orthogonal override network
+					// TODO also check that b has changed?
+					continue;  // next surrogate tile
+				}
+				tSolvedCell bBackup = b;
 
-			result = PatchTilePair2(y, z, dir);
-			if (result != Matched) {
-				continue;  // next surrogate tile
-			}
-			// result == Matched, and y and z have potentially been modified
-			if (y.id != yIdNew || y.rf != yRfNew ||  //  y must remain unchanged (in 2nd override) for a proper adjacency
-				y.id == z.id ||  // z must not be an orthogonal override network
-				z.id == cell2.id && z.rf == cell2.rf) {  // z must change (in 2nd override) for a proper adjacency
-				continue;
-			}
+				result = PatchTilePair2(b, c, dir);
+				if (result != Matched ||
+					b.id != bBackup.id || b.rf != bBackup.rf ||  //  b must remain unchanged (in 2nd override) for a proper adjacency
+					b.id == c.id ||  // c must not be an orthogonal override network
+					c.id == cell2.id && c.rf == cell2.rf) {  // c must change (in 2nd override) for a proper adjacency
+					continue;  // next surrogate tile
+				}
 
-			cell0 = x;
-			cell2 = z;
-			return Matched;
+				cell1 = a;
+				cell2 = c;
+				return Matched;
+			}
 		}
+
+		for (auto&& surrogatePair : diagonalSurrogateTiles) {
+			for (auto&& southBound : {true, false}) {
+				tSolvedCell a = cell1;
+				tSolvedCell b = {surrogatePair.first.id, relativeToAbsolute(surrogatePair.first.rf, southBound ? dir : dir+1), 0xffffffff};
+				tSolvedCell c = {surrogatePair.second.id, relativeToAbsolute(surrogatePair.second.rf, southBound ? dir : dir+1), 0xffffffff};
+				tSolvedCell d = cell2;
+
+				Rul2PatchResult result = PatchTilePair2(a, b, dir);
+				if (result != Matched ||
+					a.id != cell1.id || a.rf != cell1.rf ||  // a must remain unchanged for a proper adjacency
+					a.id == b.id) {  // a must not be a straight diagonal override network
+					continue;
+				}
+				tSolvedCell bBackup = b;
+
+				// Assuming dir == 2, then c is south of b if southBound (dir+1) or north of b if northBound (dir-1).
+				result = PatchTilePair2(b, c, (dir + (southBound ? 1 : -1)) & 3);
+				if (result != Matched ||
+					b.id != bBackup.id || b.rf != bBackup.rf ||  // b must remain unchanged (in 2nd override) for a proper adjacency
+					c.id == cell1.id && c.rf == cell1.rf) {  // otherwise we haven't gone anywhere
+					continue;
+				}
+				tSolvedCell cBackup = c;
+
+				result = PatchTilePair2(c, d, dir);
+				if (result != Matched ||
+					c.id != cBackup.id || c.rf != cBackup.rf ||  // c must remain unchanged (in 3rd override) for a proper adjacency
+					c.id == d.id || b.id == d.id ||  // d must not be a pure diagonal
+					d.id == cell2.id && d.rf == cell2.rf) {  // d must change (in 3rd override) for a proper adjacency
+					continue;
+				}
+
+				cell1 = a;
+				cell2 = d;
+				return Matched;
+			}
+		}
+
 		return NoMatch;
 	}
 
