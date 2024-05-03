@@ -14,31 +14,16 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include "cSC4NetworkTileConflictRule.h"
+#include <unordered_set>
+#include "RuleEquivalence.h"
+#include <utility>
 
 #ifdef __clang__
 #define NAKED_FUN __attribute__((naked))
 #else
 #define NAKED_FUN __declspec(naked)
 #endif
-
-enum RotFlip : uint8_t { R0F0 = 0, R1F0 = 1, R2F0 = 2, R3F0 = 3, R0F1 = 0x80, R1F1 = 0x81, R2F1 = 0x82, R3F1 = 0x83 };
-
-RotFlip rotate(RotFlip x, uint32_t rotation)
-{
-	return static_cast<RotFlip>((x + (0x1 | (x >> 6)) * (rotation & 0x3)) & 0x83);
-}
-
-RotFlip operator*(RotFlip x, RotFlip y)
-{
-	return static_cast<RotFlip>(rotate(x, y) ^ (y & 0x80));
-}
-
-struct Tile
-{
-	uint32_t id;
-	RotFlip rf;
-};
-static_assert(sizeof(Tile) == 0x8);
 
 struct tSolvedCell
 {
@@ -91,15 +76,6 @@ class cSC4NetworkTool
 };
 static_assert(offsetof(cSC4NetworkTool, networkWorldCache) == 0x1c);
 
-struct cSC4NetworkTileConflictRule
-{
-	Tile _1;
-	Tile _2;
-	Tile _3;
-	Tile _4;
-};
-static_assert(sizeof(cSC4NetworkTileConflictRule) == 32);
-
 struct OverrideRuleNode
 {
 	uint32_t unknown;  // red/black
@@ -123,104 +99,188 @@ namespace
 
 	constexpr int32_t maxRepetitions = 100;
 
-	OverrideRuleNode* const sTileConflictRules = *(reinterpret_cast<OverrideRuleNode**>(0xb466d0));
+	// OverrideRuleNode* const sTileConflictRules = *(reinterpret_cast<OverrideRuleNode**>(0xb466d0));
+	std::unordered_set<cSC4NetworkTileConflictRule, RuleEquivalenceHash, RuleEquivalence> sTileConflictRules2 = {};
 
 	enum Rul2PatchResult : uint32_t { NoMatch, Matched, Prevent };
 	typedef Rul2PatchResult (__thiscall* pfn_cSC4NetworkTool_PatchTilePair)(cSC4NetworkTool* pThis, MultiMapRange const& range, tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir);
 	pfn_cSC4NetworkTool_PatchTilePair PatchTilePair = reinterpret_cast<pfn_cSC4NetworkTool_PatchTilePair>(0x6337e0);
 
-	// equal range of multi map
-	void tileConflictRulesForId(uint32_t id, MultiMapRange& range)
-	{
-		range.last = sTileConflictRules;
-		OverrideRuleNode* node = sTileConflictRules->next;
-		while (node) {
-			if (id < node->lookupId1) {
-				range.last = node;
-				node = node->childLeft;
-			} else {
-				node = node->childRight;
-			}
-		}
+	void addRuleOverride(cSC4NetworkTileConflictRule* rule) {
+		sTileConflictRules2.insert(*rule);
+	}
 
-		range.first = sTileConflictRules;
-		node = sTileConflictRules->next;
-		while (node) {
-			if (id <= node->lookupId1) {
-				range.first = node;
-				node = node->childLeft;
+	// Lookup an override rule matching the two tiles and apply it if it exists.
+	Rul2PatchResult PatchTilePair2(tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir)
+	{
+		// First we need to convert the absolute rotations of cell1 and cell2 to the relative rotations of RUL2:
+		// dir = 0 (cell2 is west of cell1)
+		// dir = 1 (cell2 is north of cell1)
+		// dir = 2 (cell2 is east of cell1) (this is the case we usually think of when writing RUL2)
+		// dir = 3 (cell2 is south of cell1)
+		cSC4NetworkTileConflictRule dummy = {cell1.id, absoluteToRelative(cell1.rf, dir), cell2.id, absoluteToRelative(cell2.rf, dir)};  // tile 3 and 4 uninitialized
+		const auto pRule = sTileConflictRules2.find(dummy);
+		if (pRule == sTileConflictRules2.end()) {
+			return NoMatch;
+		} else if (pRule->_3.id == 0) {
+			return Prevent;
+		} else {
+			const cSC4NetworkTileConflictRule& rule = *pRule;
+			Tile& a = dummy._1;
+			Tile& b = dummy._2;
+			// Here we check not only `a.rf` but also `b.rf` as this could be relevant if `a.id == b.id`.
+			// If `b.id == 0`, its rotation does not matter, which is used for overriding tiles adjacent to bridges for example.
+			if (a.id == rule._1.id && a.rf == rule._1.rf && (b.rf == rule._2.rf || b.id == 0)) {
+				// case R0F0
+				cell1.id = rule._3.id; cell1.rf = relativeToAbsolute(rule._3.rf, dir);
+				cell2.id = rule._4.id; cell2.rf = relativeToAbsolute(rule._4.rf, dir);
+				return Matched;
+			} else if (a.id == rule._1.id && a.rf == flipVertically(rule._1.rf) && (b.rf == flipVertically(rule._2.rf) || b.id == 0)) {
+				// case R2F1
+				cell1.id = rule._3.id; cell1.rf = relativeToAbsolute(flipVertically(rule._3.rf), dir);
+				cell2.id = rule._4.id; cell2.rf = relativeToAbsolute(flipVertically(rule._4.rf), dir);
+				return Matched;
+			} else if (a.id == rule._2.id && a.rf == rotate180(rule._2.rf) && (b.rf == rotate180(rule._1.rf) || b.id == 0)) {
+				// case R2F0
+				cell1.id = rule._4.id; cell1.rf = relativeToAbsolute(rotate180(rule._4.rf), dir);
+				cell2.id = rule._3.id; cell2.rf = relativeToAbsolute(rotate180(rule._3.rf), dir);
+				return Matched;
+			} else if (a.id == rule._2.id && a.rf == flipHorizontally(rule._2.rf) && (b.rf == flipHorizontally(rule._1.rf) || b.id == 0)) {
+				// case R0F1
+				cell1.id = rule._4.id; cell1.rf = relativeToAbsolute(flipHorizontally(rule._4.rf), dir);
+				cell2.id = rule._3.id; cell2.rf = relativeToAbsolute(flipHorizontally(rule._3.rf), dir);
+				return Matched;
 			} else {
-				node = node->childRight;
+				return NoMatch;  // should not happen
 			}
 		}
 	}
 
-	const std::vector<Tile> adjacencySurrogateTiles = {
-		{0x00004B00, R1F0}, {0x00004B00, R3F0},  // Road
-		{0x57000000, R1F0}, {0x57000000, R3F0},  // Dirtroad
-		{0x05004B00, R1F0}, {0x05004B00, R3F0},  // Street
-		{0x5D540000, R1F0}, {0x5D540000, R3F0},  // Rail
-		{0x08031500, R1F0}, {0x08031500, R3F0},  // Lightrail
-		{0x09004B00, R1F0}, {0x09004B00, R3F0},  // Onewayroad  (TODO or 0x5f940300?)
-		{0x04006100, R3F0}, {0x04006100, R1F0},  // Avenue
-		{0x0D031500, R1F0}, {0x0D031500, R3F0},  // Monorail
+	constexpr uint32_t AddRuleOverrides_InjectPoint = 0x63d316;
+	constexpr uint32_t AddRuleOverrides_Return = 0x63d33c;
+
+	void NAKED_FUN Hook_AddRuleOverrides(void)
+	{
+		__asm {
+			push eax;  // store
+			push ecx;  // store
+			push edx;  // store
+			lea edx, [esp + 0x28 + 0xc];  // rule
+			push edx;  // rule
+			call addRuleOverride;  // (cdecl)
+			add esp, 0x4;
+			pop edx;  // restore
+			pop ecx;  // restore
+			pop eax;  // restore
+			push AddRuleOverrides_Return;
+			ret;
+		}
+	}
+
+	const std::vector<Tile> orthogonalSurrogateTiles = {
+		{0x00004B00, R1F0},  // Road
+		{0x57000000, R1F0},  // Dirtroad
+		{0x05004B00, R1F0},  // Street
+		{0x5D540000, R1F0},  // Rail
+		{0x08031500, R1F0},  // Lightrail
+		{0x09004B00, R1F0},  // Onewayroad  (TODO or 0x5f940300?)
+		{0x04006100, R1F0},  // Avenue
+		{0x0D031500, R1F0},  // Monorail
+	};
+
+	const std::vector<std::pair<Tile, Tile>> diagonalSurrogateTiles = {  // diagonals in west-south direction on first tile, north-east on second tile
+		std::make_pair<Tile, Tile>({0x00000A00, R1F0}, {0x00000A00, R3F0}),  // Road
+		std::make_pair<Tile, Tile>({0x57000200, R1F0}, {0x57000200, R3F0}),  // Dirtroad
+		std::make_pair<Tile, Tile>({0x5F500200, R1F0}, {0x5F500200, R3F0}),  // Street
+		std::make_pair<Tile, Tile>({0x5D540100, R1F0}, {0x5D540100, R3F0}),  // Rail
+		std::make_pair<Tile, Tile>({0x08001A00, R1F0}, {0x08001A00, R3F0}),  // Lightrail
+		std::make_pair<Tile, Tile>({0x09000A00, R1F0}, {0x09000A00, R3F0}),  // Onewayroad  (TODO or 0x5f94....?)
+		std::make_pair<Tile, Tile>({0x04000200, R2F0}, {0x04003800, R0F0}),  // Avenue~SW | Avenue~SharedDiagLeft (we don't need 0x04003800,R2F0 as this duplication should already be part of the RUL2 file)
+		std::make_pair<Tile, Tile>({0x04003800, R0F0}, {0x04000200, R0F0}),  // Avenue~SharedDiagLeft | Avenue~SW
+		std::make_pair<Tile, Tile>({0x0D001A00, R1F0}, {0x0D001A00, R3F0}),  // Monorail
 	};
 
 	// Try to find a surrogate tile that fits between the two tiles with two suitable override rules.
 	// The override is then applied from the first to the last tile.
 	// This avoids the need for direct adjacencies between the two tiles.
-	Rul2PatchResult tryAdjacencies(cSC4NetworkTool* networkTool, tSolvedCell& cell0, tSolvedCell& cell2, MultiMapRange const& range0, MultiMapRange const& range2, int8_t dir)
+	// For diagonals, this employs two surrogate tiles instead of one.
+	Rul2PatchResult tryAdjacencies(tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir)
 	{
-		for (auto&& surrogate : adjacencySurrogateTiles) {
-			tSolvedCell t0 = cell0;
-			tSolvedCell t2 = cell2;
-			tSolvedCell t1 = {surrogate.id, rotate(surrogate.rf, 6-dir), 0};
-			MultiMapRange range1;
+		for (auto&& surrogate : orthogonalSurrogateTiles) {
+			for (auto&& opposite : {false, true}) {
+				tSolvedCell a = cell1;
+				tSolvedCell b = {surrogate.id, relativeToAbsolute(surrogate.rf, opposite ? dir+2 : dir), 0xffffffff};
+				tSolvedCell c = cell2;
 
-			Rul2PatchResult result = PatchTilePair(networkTool, range0, t0, t1, dir);  // non-swapped
-			if (result != Matched) {
-				tileConflictRulesForId(t1.id, range1);
-				result = PatchTilePair(networkTool, range1, t1, t0, (dir+2) & 0x3);  // swapped
-				if (result != Matched) {
+				Rul2PatchResult result = PatchTilePair2(a, b, dir);
+				if (result != Matched ||
+					a.id != cell1.id || a.rf != cell1.rf ||  // a must remain unchanged for a proper adjacency
+					a.id == b.id) {  // a must not be an orthogonal override network
+					// TODO also check that b has changed?
 					continue;  // next surrogate tile
 				}
-			}
-			// result == Matched, and t0 and t1 have potentially been modifed
-			if (t0.id != cell0.id || t0.rf != cell0.rf ||  // t0 must remain unchanged for a proper adjacency
-				t0.id == t1.id) {  // t0 must not be an orthogonal override network
-				// TODO also check that t1 has changed?
-				continue;
-			}
-			uint32_t id1New = t1.id;
-			RotFlip rf1New = t1.rf;
+				tSolvedCell bBackup = b;
 
-			tileConflictRulesForId(t1.id, range1);
-			result = PatchTilePair(networkTool, range1, t1, t2, dir);  // non-swapped
-			if (result != Matched) {
-				result = PatchTilePair(networkTool, range2, t2, t1, (dir+2) & 0x3);  // swapped
-				if (result != Matched) {
+				result = PatchTilePair2(b, c, dir);
+				if (result != Matched ||
+					b.id != bBackup.id || b.rf != bBackup.rf ||  //  b must remain unchanged (in 2nd override) for a proper adjacency
+					b.id == c.id ||  // c must not be an orthogonal override network
+					c.id == cell2.id && c.rf == cell2.rf) {  // c must change (in 2nd override) for a proper adjacency
 					continue;  // next surrogate tile
 				}
-			}
-			// result == Matched, and t1 and t2 have potentially been modified
-			if (t1.id != id1New || t1.rf != rf1New ||  //  t1 must remain unchanged (in 2nd override) for a proper adjacency
-				t1.id == t2.id ||  // t2 must not be an orthogonal override network
-				t2.id == cell2.id && t2.rf == cell2.rf) {  // t2 must change (in 2nd override) for a proper adjacency
-				continue;
-			}
 
-			cell0 = t0;
-			cell2 = t2;
-			return Matched;
+				cell1 = a;
+				cell2 = c;
+				return Matched;
+			}
 		}
+
+		for (auto&& surrogatePair : diagonalSurrogateTiles) {
+			for (auto&& southBound : {true, false}) {
+				tSolvedCell a = cell1;
+				tSolvedCell b = {surrogatePair.first.id, relativeToAbsolute(surrogatePair.first.rf, southBound ? dir : dir+1), 0xffffffff};
+				tSolvedCell c = {surrogatePair.second.id, relativeToAbsolute(surrogatePair.second.rf, southBound ? dir : dir+1), 0xffffffff};
+				tSolvedCell d = cell2;
+
+				Rul2PatchResult result = PatchTilePair2(a, b, dir);
+				if (result != Matched ||
+					a.id != cell1.id || a.rf != cell1.rf ||  // a must remain unchanged for a proper adjacency
+					a.id == b.id) {  // a must not be a straight diagonal override network
+					continue;
+				}
+				tSolvedCell bBackup = b;
+
+				// Assuming dir == 2, then c is south of b if southBound (dir+1) or north of b if northBound (dir-1).
+				result = PatchTilePair2(b, c, (dir + (southBound ? 1 : -1)) & 3);
+				if (result != Matched ||
+					b.id != bBackup.id || b.rf != bBackup.rf ||  // b must remain unchanged (in 2nd override) for a proper adjacency
+					c.id == cell1.id && c.rf == cell1.rf) {  // otherwise we haven't gone anywhere
+					continue;
+				}
+				tSolvedCell cBackup = c;
+
+				result = PatchTilePair2(c, d, dir);
+				if (result != Matched ||
+					c.id != cBackup.id || c.rf != cBackup.rf ||  // c must remain unchanged (in 3rd override) for a proper adjacency
+					c.id == d.id || b.id == d.id ||  // d must not be a pure diagonal
+					d.id == cell2.id && d.rf == cell2.rf) {  // d must change (in 3rd override) for a proper adjacency
+					continue;
+				}
+
+				cell1 = a;
+				cell2 = d;
+				return Matched;
+			}
+		}
+
 		return NoMatch;
 	}
 
 	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, eastl::vector<tSolvedCell>& cellsBuffer)
 	{
-		if (sTileConflictRules == nullptr) {
-			return true;  // success as RUL2 file was not yet loaded
-		}
+		// if (sTileConflictRules == nullptr) {
+		// 	return true;  // success as RUL2 file was not yet loaded
+		// }
 
 		int32_t countMatchesDown = cellsBuffer.size() * 8;  // 4 directions * {non-swapped,swapped}
 		if (countMatchesDown <= maxRepetitions) {
@@ -236,17 +296,14 @@ namespace
 		int32_t countPatchesCurrentCell = 0;
 		while (true) {
 mainLoop:
-			MultiMapRange range;
-			tileConflictRulesForId(cell->id, range);
-
 			if (countPatchesCurrentCell <= maxRepetitions) {
 				for (uint32_t dir = 0; dir < 4; dir++) {
 					uint32_t z = cell->xz >> 16;
 					uint32_t x = cell->xz & 0xffff;
 					uint32_t nextCellXZ = (kNextZ[dir] + z) * 0x10000 + (kNextX[dir] + x);
 
-					cSC4NetworkCellInfo* cellInfo = GetCell(&(networkTool->networkWorldCache), nextCellXZ);
-					if (cellInfo == nullptr) {
+					cSC4NetworkCellInfo* cell2Info = GetCell(&(networkTool->networkWorldCache), nextCellXZ);
+					if (cell2Info == nullptr) {
 						continue;  // next direction
 					}
 
@@ -254,8 +311,8 @@ mainLoop:
 					tSolvedCell* cell2 = nullptr;
 					bool isCell2StackLocal = false;
 
-					if (cellInfo->idxInCellsBuffer < 0) {
-						cISC4NetworkOccupant* networkOccupant = cellInfo->networkOccupant;
+					if (cell2Info->idxInCellsBuffer < 0) {
+						cISC4NetworkOccupant* networkOccupant = cell2Info->networkOccupant;
 						if (networkOccupant == nullptr) {
 							continue;  // next direction
 						}
@@ -265,14 +322,14 @@ mainLoop:
 						temp.rf = static_cast<RotFlip>(networkOccupant->GetRotationAndFlip());
 						isCell2StackLocal = true;
 					} else {
-						cell2 = &(cellsBuffer[cellInfo->idxInCellsBuffer]);
+						cell2 = &(cellsBuffer[cell2Info->idxInCellsBuffer]);
 						if (cell2 == nullptr) {
 							continue;  // next direction
 						}
 					}
 					// now cell2 is not nullptr
 
-					if (cellInfo->isImmovable || cellInfo->isNetworkLot) {
+					if (cell2Info->isImmovable || cell2Info->isNetworkLot) {
 						if (!isCell2StackLocal) {
 							temp = *cell2;
 							cell2 = &temp;
@@ -285,23 +342,16 @@ mainLoop:
 						continue;  // next direction
 					}
 
-					Rul2PatchResult patchResult = PatchTilePair(networkTool, range, *cell, *cell2, dir);  // non-swapped evaluation
+					Rul2PatchResult patchResult = PatchTilePair2(*cell, *cell2, dir);
 
 					if (patchResult == NoMatch) {
-						MultiMapRange range2;
-						tileConflictRulesForId(cell2->id, range2);
-						if (isCell2StackLocal) {  // otherwise, cell2 is queued in buffer, so we will eventually process it from cell2's point of view anyway
-							patchResult = PatchTilePair(networkTool, range2, *cell2, *cell, (dir - 2) & 3);  // swapped evaluation
-						}
-						if (patchResult == NoMatch) {
-							patchResult = tryAdjacencies(networkTool, *cell, *cell2, range, range2, dir);  // cell -> surrogate -> cell2
-							if (patchResult != Matched) {  // potential Prevents from adjacencies are discarded
-								if (isCell2StackLocal) {
-									patchResult = tryAdjacencies(networkTool, *cell2, *cell, range2, range, (dir - 2) & 3);  // cell2 -> surrogate -> cell
-								}
-								if (patchResult != Matched) {
-									continue;  // next direction
-								}
+						patchResult = tryAdjacencies(*cell, *cell2, dir);  // cell -> surrogate -> cell2
+						if (patchResult != Matched) {  // potential Prevents from adjacencies are discarded
+							if (isCell2StackLocal) {  // otherwise, cell2 is queued in buffer, so we will eventually process it from cell2's point of view anyway
+								patchResult = tryAdjacencies(*cell2, *cell, (dir - 2) & 3);  // cell2 -> surrogate -> cell
+							}
+							if (patchResult != Matched) {
+								continue;  // next direction
 							}
 						}
 					}
@@ -320,7 +370,7 @@ mainLoop:
 
 					if (isCell2StackLocal) {  // cell is not in buffer
 						uint32_t idx = cell - &(cellsBuffer.front());
-						cellInfo->idxInCellsBuffer = cellsBuffer.size();
+						cell2Info->idxInCellsBuffer = cellsBuffer.size();
 						cellsBuffer.push_back(*cell2);
 						cell = &(cellsBuffer[idx]);  // push_back might have triggered reallocation of the cells, so we retrieve the current address again
 					}
@@ -391,5 +441,7 @@ void Rul2Engine::Install()
 	// 	std::cout << "RotFlip sanity check failed.\n";
 	// }
 
+	// sTileConflictRules2.reserve(4500 * 1000);  // TODO
 	Patching::InstallHook(AdjustTileSubsets_InjectPoint, Hook_AdjustTileSubsets);
+	Patching::InstallHook(AddRuleOverrides_InjectPoint, Hook_AddRuleOverrides);
 }
