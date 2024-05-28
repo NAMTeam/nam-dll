@@ -67,6 +67,7 @@ static constexpr std::string_view PluginLogFileName = "NAM.log";
 static uint32_t DoTunnelChanged_InjectPoint;
 static uint32_t DoTunnelChanged_ContinueJump;
 static uint32_t DoTunnelChanged_ReturnJump;
+static const float FerryMinimumBridgeHeight = 20.0f; // 20 meters
 
 namespace
 {
@@ -93,13 +94,27 @@ namespace
 		*((uint8_t*)address) = newValue;
 	}
 
+	void OverwriteMemory(void* address, uint32_t newValue)
+	{
+		DWORD oldProtect;
+		// Allow the executable memory to be written to.
+		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect(
+			address,
+			sizeof(newValue),
+			PAGE_EXECUTE_READWRITE,
+			&oldProtect));
+
+		// Patch the memory at the specified address.
+		*((uint32_t*)address) = newValue;
+	}
+
 	void InstallHook(uint32_t address, void (*pfnFunc)(void))
 	{
 		DWORD oldProtect;
-		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect((void *)address, 5, PAGE_EXECUTE_READWRITE, &oldProtect));
+		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect((void*)address, 5, PAGE_EXECUTE_READWRITE, &oldProtect));
 
 		*((uint8_t*)address) = 0xE9;
-		*((uint32_t*)(address+1)) = ((uint32_t)pfnFunc) - address - 5;
+		*((uint32_t*)(address + 1)) = ((uint32_t)pfnFunc) - address - 5;
 	}
 
 	void InstallDiagonalStreetsPatch()
@@ -108,8 +123,8 @@ namespace
 
 		try
 		{
-			OverwriteMemory((void*)0x637f80, 0xeb);
-			OverwriteMemory((void*)0x63aff2, 0xeb);
+			OverwriteMemory((void*)0x637f80, (uint8_t)0xeb);
+			OverwriteMemory((void*)0x63aff2, (uint8_t)0xeb);
 
 			logger.WriteLine(
 				LogLevel::Info,
@@ -130,7 +145,7 @@ namespace
 
 		try
 		{
-			OverwriteMemory((void*)0x729fff, 0x00);
+			OverwriteMemory((void*)0x729fff, (uint8_t)0x00);
 
 			logger.WriteLine(
 				LogLevel::Info,
@@ -141,6 +156,32 @@ namespace
 			logger.WriteLineFormatted(
 				LogLevel::Error,
 				"Failed to install the Disable auto-connect for RHW and Streets patch.\n%s",
+				e.what());
+		}
+	}
+
+	void InstallFerryBridgeHeightPatch()
+	{
+		Logger& logger = Logger::GetInstance();
+
+		try
+		{
+			// Replace the address of the float value that the game uses for its minimum
+			// ferry bridge height calculation with a pointer to our own float value.
+			//
+			// SC4's default minimum ferry bridge height is 30 meters above sea level,
+			// we replace that with a value that sets it to 20 meters above sea level.
+			OverwriteMemory((void*)0x6459bc, (uint32_t)&FerryMinimumBridgeHeight);
+
+			logger.WriteLine(
+				LogLevel::Info,
+				"Installed the Ferry Bridge Height patch.");
+		}
+		catch (const wil::ResultException& e)
+		{
+			logger.WriteLineFormatted(
+				LogLevel::Error,
+				"Failed to install the Ferry Bridge Height patch.\n%s",
 				e.what());
 		}
 	}
@@ -234,9 +275,9 @@ noMatchingTunnelNetwork:
 	void InstallMemoryPatches(const uint16_t gameVersion)
 	{
 		// Patch the game's memory to enable a few NAM features.
-		// These patches were all developed by memo.
 		InstallDiagonalStreetsPatch();
 		InstallDisableAutoconnectForStreetsPatch();
+		InstallFerryBridgeHeightPatch();
 		InstallTunnelsPatch(gameVersion);
 	}
 }
