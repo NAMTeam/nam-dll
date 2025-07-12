@@ -35,6 +35,9 @@
 #include "cIGZWin.h"
 #include "cIGZWinMgr.h"
 #include "cISC4App.h"
+#include "cISC4City.h"
+#include "cISC4AdvisorSystem.h"
+#include "cISCLua.h"
 #include "cISC4View3DWin.h"
 #include "cRZMessage2COMDirector.h"
 #include "GZServPtrs.h"
@@ -307,9 +310,33 @@ public:
 		}
 	}
 
+	void RegisterDllVersionInLua() {
+		cISC4AppPtr pApp;
+		if (!pApp) {
+			return;
+		}
+		cISC4City* pCity = pApp->GetCity();
+		if (pCity)
+		{
+			cISC4AdvisorSystem* pAdvisorSystem = pCity->GetAdvisorSystem();
+			if (pAdvisorSystem)
+			{
+				cISCLua* const pLua = pAdvisorSystem->GetScriptingContext();
+				if (pLua)
+				{
+					const char* const kVersionVariableName = "nam_dll_version";
+					const std::string_view& version_str = PLUGIN_VERSION_STR;
+					pLua->PushLString(version_str.data(), version_str.size());
+					pLua->SetGlobal(kVersionVariableName);
+				}
+			}
+		}
+	}
+
 	void PostCityInit(cIGZMessage2Standard* pStandardMessage)
 	{
 		RegisterKeyboardShortcuts();
+		RegisterDllVersionInLua();
 	}
 
 	void ProcessKeyboardShortcut(uint32_t dwMessageID)
