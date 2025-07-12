@@ -183,7 +183,7 @@ namespace
 		{0x05004B00, R1F0},  // Street
 		{0x5D540000, R1F0},  // Rail
 		{0x08031500, R1F0},  // Lightrail
-		{0x09004B00, R1F0},  // Onewayroad  (TODO or 0x5f940300?)
+		{0x09004B00, R1F0},  // Onewayroad
 		{0x04006100, R1F0},  // Avenue
 		{0x0D031500, R1F0},  // Monorail
 	};
@@ -194,7 +194,7 @@ namespace
 		std::make_pair<Tile, Tile>({0x5F500200, R1F0}, {0x5F500200, R3F0}),  // Street
 		std::make_pair<Tile, Tile>({0x5D540100, R1F0}, {0x5D540100, R3F0}),  // Rail
 		std::make_pair<Tile, Tile>({0x08001A00, R1F0}, {0x08001A00, R3F0}),  // Lightrail
-		std::make_pair<Tile, Tile>({0x09000A00, R1F0}, {0x09000A00, R3F0}),  // Onewayroad  (TODO or 0x5f94....?)
+		std::make_pair<Tile, Tile>({0x09000A00, R1F0}, {0x09000A00, R3F0}),  // Onewayroad
 		std::make_pair<Tile, Tile>({0x04000200, R2F0}, {0x04003800, R0F0}),  // Avenue~SW | Avenue~SharedDiagLeft (we don't need 0x04003800,R2F0 as this duplication should already be part of the RUL2 file)
 		std::make_pair<Tile, Tile>({0x04003800, R0F0}, {0x04000200, R0F0}),  // Avenue~SharedDiagLeft | Avenue~SW
 		std::make_pair<Tile, Tile>({0x0D001A00, R1F0}, {0x0D001A00, R3F0}),  // Monorail
@@ -419,28 +419,6 @@ mainLoop:
 
 void Rul2Engine::Install()
 {
-	// sanity check
-	// const std::array<RotFlip, 8> rotFlipValues = {R0F0, R1F0, R2F0, R3F0, R0F1, R3F1, R2F1, R1F1};
-	// const std::array<int, 8> rotFlipIndexes = {0,1,2,3,4,5,6,7};
-	// const int multiplicationTable[8][8] = {
-	// 	{0,1,2,3,4,5,6,7},
-	// 	{1,2,3,0,7,4,5,6},
-	// 	{2,3,0,1,6,7,4,5},
-	// 	{3,0,1,2,5,6,7,4},
-	// 	{4,5,6,7,0,1,2,3},
-	// 	{5,6,7,4,3,0,1,2},
-	// 	{6,7,4,5,2,3,0,1},
-	// 	{7,4,5,6,1,2,3,0}
-	// };
-	// bool passed = std::all_of(rotFlipIndexes.cbegin(), rotFlipIndexes.cend(), [&rotFlipValues, &rotFlipIndexes, &multiplicationTable](int i) {
-	// 	return std::all_of(rotFlipIndexes.cbegin(), rotFlipIndexes.cend(), [&rotFlipValues, &multiplicationTable, &i](int j) {
-	// 		return rotFlipValues[i] * rotFlipValues[j] == rotFlipValues[multiplicationTable[i][j]];
-	// 	});
-	// });
-	// if (!passed) {
-	// 	std::cout << "RotFlip sanity check failed.\n";
-	// }
-
 	// sTileConflictRules2.reserve(4500 * 1000);  // TODO
 	Patching::InstallHook(AdjustTileSubsets_InjectPoint, Hook_AdjustTileSubsets);
 	Patching::InstallHook(AddRuleOverrides_InjectPoint, Hook_AddRuleOverrides);
