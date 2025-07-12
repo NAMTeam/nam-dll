@@ -438,6 +438,16 @@ public:
 		if (gameVersion == 641)
 		{
 			InstallMemoryPatches(gameVersion);
+
+			cIGZFrameWork* const pFramework = RZGetFrameWork();
+			if (pFramework->GetState() < cIGZFrameWork::kStatePreAppInit)
+			{
+				pFramework->AddHook(this);
+			}
+			else
+			{
+				PreAppInit();
+			}
 		}
 		else
 		{
@@ -447,18 +457,6 @@ public:
 				"The memory patches require game version 641, found game version %d.",
 				gameVersion);
 		}
-
-		cIGZFrameWork* const pFramework = RZGetFrameWork();
-
-		if (pFramework->GetState() < cIGZFrameWork::kStatePreAppInit)
-		{
-			pFramework->AddHook(this);
-		}
-		else
-		{
-			PreAppInit();
-		}
-
 		return true;
 	}
 
