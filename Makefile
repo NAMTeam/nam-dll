@@ -19,23 +19,17 @@ compile:
 	cd src && \
 		clang-cl -target i386-pc-windows-msvc -ferror-limit=1 -fuse-ld=lld-link \
 		-Wno-inconsistent-missing-override \
-		-Wno-deprecated-builtins \
 		/std:c++20 /EHsc /LD /MD \
 		/Gy /Gd /O2 /Oi \
 		/D "_WIN32" /D "NDEBUG" /D "_UNICODE" /D "UNICODE" \
 		/D "_USRDLL" /D "_WINDLL" \
 		/imsvc ../vendor/xwin/crt/include /imsvc ../vendor/xwin/sdk/include/ucrt /imsvc ../vendor/xwin/sdk/include/um /imsvc ../vendor/xwin/sdk/include/shared \
-		/I ../include \
 		/I ../vendor/gzcom-dll/gzcom-dll/include \
 		/I ../vendor/wil/include \
-		/I ../vendor/sc4-resource-loading-hooks/vendor/EABase/include/Common \
-		/I ../vendor/sc4-resource-loading-hooks/vendor/EASTL/include \
 		/o NAM.dll ./*.cpp ../vendor/gzcom-dll/gzcom-dll/src/{cRZCOMDllDirector,cRZBaseString}.cpp \
-		../vendor/sc4-resource-loading-hooks/vendor/gzcom-dll/src/EASTLAllocatorSC4.cpp \
 		/link /libpath:../vendor/xwin/crt/lib/x86 /libpath:../vendor/xwin/sdk/lib/um/x86 /libpath:../vendor/xwin/sdk/lib/ucrt/x86 \
 		version.lib ole32.lib
 #
-# -Wno-deprecated-builtins = suppress warnings in legacy EASTL code
 # /GL = whole program optimization -> not supported by clang
 # /W3 = Wall -> not necessary
 # /Gy = put each function in own section

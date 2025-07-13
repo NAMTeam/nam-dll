@@ -9,8 +9,7 @@
 #include "cISC4NetworkManager.h"
 #include <Windows.h>
 #include "wil/win32_helpers.h"
-#include "EASTLConfigSC4.h"
-#include "EASTL/vector.h"
+#include "SC4Vector.h"
 #include <vector>
 #include <array>
 #include <algorithm>
@@ -276,7 +275,7 @@ namespace
 		return NoMatch;
 	}
 
-	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, eastl::vector<tSolvedCell>& cellsBuffer)
+	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, SC4Vector<tSolvedCell>& cellsBuffer)
 	{
 		// if (sTileConflictRules == nullptr) {
 		// 	return true;  // success as RUL2 file was not yet loaded
@@ -290,7 +289,7 @@ namespace
 		if (cellsBuffer.empty()) {
 			return true;
 		}
-		tSolvedCell* cell = &(cellsBuffer[0]);
+		tSolvedCell* cell = cellsBuffer.begin();
 		bool foundMatch = false;
 
 		int32_t countPatchesCurrentCell = 0;
@@ -322,7 +321,7 @@ mainLoop:
 						temp.rf = static_cast<RotFlip>(networkOccupant->GetRotationAndFlip());
 						isCell2StackLocal = true;
 					} else {
-						cell2 = &(cellsBuffer[cell2Info->idxInCellsBuffer]);
+						cell2 = cellsBuffer.begin() + (cell2Info->idxInCellsBuffer);
 						if (cell2 == nullptr) {
 							continue;  // next direction
 						}
@@ -369,10 +368,10 @@ mainLoop:
 					foundMatch = true;
 
 					if (isCell2StackLocal) {  // cell is not in buffer
-						uint32_t idx = cell - &(cellsBuffer.front());
+						uint32_t idx = cell - cellsBuffer.begin();
 						cell2Info->idxInCellsBuffer = cellsBuffer.size();
 						cellsBuffer.push_back(*cell2);
-						cell = &(cellsBuffer[idx]);  // push_back might have triggered reallocation of the cells, so we retrieve the current address again
+						cell = cellsBuffer.begin() + idx;  // push_back might have triggered reallocation of the cells, so we retrieve the current address again
 					}
 
 					countPatchesCurrentCell++;
@@ -382,10 +381,10 @@ mainLoop:
 
 			cell = cell + 1;
 			countPatchesCurrentCell = 0;
-			if (cell != &(cellsBuffer.front()) + cellsBuffer.size()) {  // if not reached end
+			if (cell != cellsBuffer.begin() + cellsBuffer.size()) {  // if not reached end
 				continue;  // main loop
 			} else if (foundMatch) {  // reached end, but also foundMatch, so continue until all cells remain unchanged
-				cell = &(cellsBuffer[0]);
+				cell = cellsBuffer.begin();
 				foundMatch = false;
 				continue;  // main loop
 			} else {

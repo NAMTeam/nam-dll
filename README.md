@@ -64,8 +64,6 @@ See [LICENSE.txt](LICENSE.txt) for more information.
 [gzcom-dll](https://github.com/nsgomez/gzcom-dll/tree/master) MIT License.
 [Windows Implementation Library](https://github.com/microsoft/wil) MIT License.
 [SC4Fix](https://github.com/nsgomez/sc4fix) MIT License.
-[EABase](https://github.com/electronicarts/EABase) BSD 3-Clause License.
-[EASTL](https://github.com/electronicarts/EASTL) BSD 3-Clause License.
 
 # Source Code
 
