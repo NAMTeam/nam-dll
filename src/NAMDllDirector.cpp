@@ -69,6 +69,7 @@ static constexpr std::string_view PluginLogFileName = "NAM.log";
 static uint32_t DoTunnelChanged_InjectPoint;
 static uint32_t DoTunnelChanged_ContinueJump;
 static uint32_t DoTunnelChanged_ReturnJump;
+static const float FerryMinimumBridgeHeight = 20.0f; // 20 meters
 
 namespace
 {
@@ -87,8 +88,8 @@ namespace
 
 		try
 		{
-			Patching::OverwriteMemory((void*)0x637f80, 0xeb);
-			Patching::OverwriteMemory((void*)0x63aff2, 0xeb);
+			Patching::OverwriteMemory((void*)0x637f80, (uint8_t)0xeb);
+			Patching::OverwriteMemory((void*)0x63aff2, (uint8_t)0xeb);
 
 			logger.WriteLine(
 				LogLevel::Info,
@@ -109,7 +110,7 @@ namespace
 
 		try
 		{
-			Patching::OverwriteMemory((void*)0x729fff, 0x00);
+			Patching::OverwriteMemory((void*)0x729fff, (uint8_t)0x00);
 
 			logger.WriteLine(
 				LogLevel::Info,
@@ -120,6 +121,32 @@ namespace
 			logger.WriteLineFormatted(
 				LogLevel::Error,
 				"Failed to install the Disable auto-connect for RHW and Streets patch.\n%s",
+				e.what());
+		}
+	}
+
+	void InstallFerryBridgeHeightPatch()
+	{
+		Logger& logger = Logger::GetInstance();
+
+		try
+		{
+			// Replace the address of the float value that the game uses for its minimum
+			// ferry bridge height calculation with a pointer to our own float value.
+			//
+			// SC4's default minimum ferry bridge height is 30 meters above sea level,
+			// we replace that with a value that sets it to 20 meters above sea level.
+			Patching::OverwriteMemory((void*)0x6459bc, (uint32_t)&FerryMinimumBridgeHeight);
+
+			logger.WriteLine(
+				LogLevel::Info,
+				"Installed the Ferry Bridge Height patch.");
+		}
+		catch (const wil::ResultException& e)
+		{
+			logger.WriteLineFormatted(
+				LogLevel::Error,
+				"Failed to install the Ferry Bridge Height patch.\n%s",
 				e.what());
 		}
 	}
@@ -216,6 +243,7 @@ noMatchingTunnelNetwork:
 		// Patch the game's memory to enable a few NAM features.
 		InstallDiagonalStreetsPatch();
 		InstallDisableAutoconnectForStreetsPatch();
+		InstallFerryBridgeHeightPatch();
 		InstallTunnelsPatch(gameVersion);
 		try {
 			Rul2Engine::Install();
