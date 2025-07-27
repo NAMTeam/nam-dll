@@ -195,6 +195,8 @@ namespace
 		{0x09004B00, R1F0},  // Onewayroad
 		{0x04006100, R1F0},  // Avenue
 		{0x0D031500, R1F0},  // Monorail
+		{0x02001500, R0F0},  // Highway
+		{0x0A001500, R0F0},  // Groundhighway
 	};
 
 	const std::vector<std::pair<Tile, Tile>> diagonalSurrogateTiles = {  // diagonals in west-south direction on first tile, north-east on second tile
@@ -205,8 +207,12 @@ namespace
 		std::make_pair<Tile, Tile>({0x08001A00, R1F0}, {0x08001A00, R3F0}),  // Lightrail
 		std::make_pair<Tile, Tile>({0x09000A00, R1F0}, {0x09000A00, R3F0}),  // Onewayroad
 		std::make_pair<Tile, Tile>({0x04000200, R2F0}, {0x04003800, R0F0}),  // Avenue~SW | Avenue~SharedDiagLeft (we don't need 0x04003800,R2F0 as this duplication should already be part of the RUL2 file)
-		std::make_pair<Tile, Tile>({0x04003800, R0F0}, {0x04000200, R0F0}),  // Avenue~SharedDiagLeft | Avenue~SW
+		std::make_pair<Tile, Tile>({0x04003800, R0F0}, {0x04000200, R0F0}),  // Avenue~SharedDiagLeft | Avenue~NE
 		std::make_pair<Tile, Tile>({0x0D001A00, R1F0}, {0x0D001A00, R3F0}),  // Monorail
+		std::make_pair<Tile, Tile>({0x02002200, R1F0}, {0x02002100, R1F0}),  // Highway~SW | Highway~SharedDiagLeft
+		std::make_pair<Tile, Tile>({0x02002100, R1F0}, {0x02002200, R3F0}),  // Highway~SharedDiagLeft | Highway~NE
+		std::make_pair<Tile, Tile>({0x0A002200, R1F0}, {0x0A002100, R1F0}),  // Groundhighway~SW | Groundhighway~SharedDiagLeft
+		std::make_pair<Tile, Tile>({0x0A002100, R1F0}, {0x0A002200, R3F0}),  // Groundhighway~SharedDiagLeft | Groundhighway~NE
 	};
 
 	// Try to find a surrogate tile that fits between the two tiles with two suitable override rules.
