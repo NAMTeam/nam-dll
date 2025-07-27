@@ -3,6 +3,8 @@
 
 enum RotFlip : uint8_t { R0F0 = 0, R1F0 = 1, R2F0 = 2, R3F0 = 3, R0F1 = 0x80, R1F1 = 0x81, R2F1 = 0x82, R3F1 = 0x83 };
 
+static constexpr RotFlip rotFlipValues[] = { R0F0, R1F0, R2F0, R3F0, R0F1, R1F1, R2F1, R3F1 };
+
 static constexpr RotFlip rotate(RotFlip x, uint32_t rotation)
 {
 	return static_cast<RotFlip>((x + (0x1 | (x >> 6)) * (rotation & 0x3)) & 0x83);

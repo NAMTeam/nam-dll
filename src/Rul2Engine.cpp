@@ -106,7 +106,17 @@ namespace
 	pfn_cSC4NetworkTool_PatchTilePair PatchTilePair = reinterpret_cast<pfn_cSC4NetworkTool_PatchTilePair>(0x6337e0);
 
 	void addRuleOverride(cSC4NetworkTileConflictRule* rule) {
-		sTileConflictRules2.insert(*rule);
+		if (rule->_2.id != 0) {  // we don't check _1.id != 0 as vanilla doesn't do that either, presumably
+			sTileConflictRules2.insert(*rule);
+		} else {
+			// For the (few) overrides with 0 in 2nd tile (e.g. next to bridges), we add all rotations, to simplify lookup.
+			// (TODO A different solution would special-case the implementation of RuleEquivalence to handle ID 0, but that would be more complex.)
+			for (const auto rf : rotFlipValues) {
+				cSC4NetworkTileConflictRule tmpRule = *rule;
+				tmpRule._2.rf = rf;
+				sTileConflictRules2.insert(tmpRule);
+			}
+		}
 	}
 
 	// Lookup an override rule matching the two tiles and apply it if it exists.
