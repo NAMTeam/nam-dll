@@ -46,12 +46,7 @@
 #include "wil/win32_helpers.h"
 #include "Patching.h"
 #include "Rul2Engine.h"
-
-#ifdef __clang__
-#define NAKED_FUN __attribute__((naked))
-#else
-#define NAKED_FUN __declspec(naked)
-#endif
+#include "NetworkSlopes.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -249,12 +244,14 @@ noMatchingTunnelNetwork:
 		InstallFerryBridgeHeightPatch();
 		InstallTunnelsPatch(gameVersion);
 		try {
+			logger.WriteLine(LogLevel::Info, "Installing the RUL2 Engine patch.");
 			Rul2Engine::Install();
-			logger.WriteLine(LogLevel::Info, "Installed the RUL2 Engine patch.");
+			logger.WriteLine(LogLevel::Info, "Installing the Network Slopes patch.");
+			NetworkSlopes::Install();
 		}
 		catch (const wil::ResultException& e)
 		{
-			logger.WriteLineFormatted(LogLevel::Error, "Failed to install the RUL2 Engine patch.\n%s", e.what());
+			logger.WriteLineFormatted(LogLevel::Error, "Failed to install the last patch.\n%s", e.what());
 		}
 	}
 }
