@@ -26,10 +26,7 @@ class cSC4NetworkCellInfo
 		uint8_t RESERVED[2];
 		bool isNetworkLot;
 		uint8_t RESERVED[168-4-0x43-16];
-		int32_t vertexNW;  // vertex indices in contiguous (n+1)×(n+1) array where n is city size
-		int32_t vertexSW;
-		int32_t vertexSE;
-		int32_t vertexNE;
+		int32_t vertices[4];  // NW, SW, SE, NE (see CellCorner): vertex indices in contiguous (n+1)×(n+1) array where n is city size
 		int32_t idxInCellsBuffer;
 };
 static_assert(offsetof(cSC4NetworkCellInfo, edgesPerNetwork) == 0x18);
@@ -111,6 +108,11 @@ class cSC4NetworkTool
 		typedef void (__thiscall* pfn_InsertSmoothnessConstraint)(cSC4NetworkTool* pThis, int32_t vertex1, int32_t vertex2, int32_t vertex3, float smoothness);
 		inline void InsertSmoothnessConstraint(int32_t vertex1, int32_t vertex2, int32_t vertex3, float smoothness) {
 			return reinterpret_cast<pfn_InsertSmoothnessConstraint>(0x636030)(this, vertex1, vertex2, vertex3, smoothness);
+		}
+
+		typedef cSC4NetworkCellInfo* (__thiscall* pfn_GetCellInfo)(cSC4NetworkTool* pThis, uint32_t xz);
+		inline cSC4NetworkCellInfo* GetCellInfo(uint32_t xz) {
+			return reinterpret_cast<pfn_GetCellInfo>(0x633220)(this, xz);
 		}
 
 		void* vtable;

@@ -39,3 +39,8 @@ static constexpr RotFlip flipHorizontally(RotFlip rf)
 {
 	return static_cast<RotFlip>(rf ^ 0x80);
 }
+
+static constexpr bool isFlipped(RotFlip rf)
+{
+	return (rf & 0x80) != 0;
+}
