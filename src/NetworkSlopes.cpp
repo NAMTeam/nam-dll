@@ -104,6 +104,41 @@ namespace
 	}
 	const std::unordered_map<IntersectionFlags, OnslopeSpec> onslopePieces = initOnslopePiecesWithRotations();
 
+	enum CurveType : uint8_t { Curve45Diag, Curve45Orth, Curve45Kink, Diagonal, Curve45DoubleKink };
+
+	struct CurveSpec {
+		CurveType curveType;
+		RotFlip rf;
+	};
+
+	constexpr uint32_t flagsFromOctal(uint8_t w, uint8_t n, uint8_t e, uint8_t s) {
+		return ((uint32_t) s) << 24 | ((uint32_t) e) << 16 | ((uint32_t) n) << 8 | ((uint32_t) w);
+	}
+
+	const std::unordered_map<uint32_t, CurveSpec> curvePiecesPartial = {
+		{flagsFromOctal(00, 00, 01, 013), {Curve45Diag, R0F0}},
+		{flagsFromOctal(03, 00, 00, 011), {Curve45Diag, R0F1}},
+		{flagsFromOctal(00, 02, 00, 011), {Curve45Orth, R0F0}},
+		{flagsFromOctal(00, 02, 00, 013), {Curve45Orth, R0F1}},
+		{flagsFromOctal(00, 00, 02, 013), {Curve45Kink, R0F0}},
+		{flagsFromOctal(02, 00, 00, 011), {Curve45Kink, R0F1}},
+		{flagsFromOctal(00, 00, 011, 013), {Curve45DoubleKink, R0F0}},
+		{flagsFromOctal(013, 00, 00, 011), {Curve45DoubleKink, R0F1}},
+		{flagsFromOctal(00, 00, 01, 03), {Diagonal, R0F0}},
+	};
+
+	std::unordered_map<uint32_t, CurveSpec> initCurvePiecesWithRotations() {
+		std::unordered_map<uint32_t, CurveSpec> curvePieces = {};
+		for (auto const& [key, value] : curvePiecesPartial) {
+			curvePieces[key] = value;
+			curvePieces[std::rotl(key,  8)] = {value.curveType, rotate(value.rf, 1)};
+			curvePieces[std::rotl(key, 16)] = {value.curveType, rotate(value.rf, 2)};
+			curvePieces[std::rotl(key, 24)] = {value.curveType, rotate(value.rf, 3)};
+		}
+		return curvePieces;
+	}
+	const std::unordered_map<uint32_t, CurveSpec> curvePieces = initCurvePiecesWithRotations();
+
 	uint32_t countConnections(uint32_t edgeFlags, uint8_t mask) {
 		uint32_t m = mask & 0xff;
 		return
@@ -191,6 +226,15 @@ namespace
 			}
 		}
 
+		const CurveSpec* curveSpec;
+		if (!isMulti && !cellInfo.isNetworkLot && (cellInfo.networkTypeFlags & (NW_MASK(LightRail) | NW_MASK(Monorail))) == 0) {
+			// For now, avoid sloped curves for Lightrail/Monorail, as otherwise support pillars could sometimes stick through the track
+			// as they are not perfectly perpendicular to the gradient of the S3D polygons. Consider revisiting this when there are Lightrail WRCs.
+			if (auto search = curvePieces.find(cellInfo.edgeFlagsCombined); search != curvePieces.end()) {
+				curveSpec = &search->second;
+			}
+		}
+
 		if (onslopeSpec != nullptr)
 		{
 			// larger slope tolerance for onslope pieces
@@ -203,6 +247,76 @@ namespace
 				networkTool->InsertEqualityConstraint(cellInfo.vertices[SE], cellInfo.vertices[SW]);
 				networkTool->InsertEqualityConstraint(cellInfo.vertices[NE], cellInfo.vertices[NW]);
 				networkTool->InsertSlopeConstraint(cellInfo.vertices[SE], cellInfo.vertices[NE], slope);
+			}
+		}
+		else if (curveSpec != nullptr)
+		{
+			// slope tolerance for 45 degree curves
+			auto getAdjacentCell = [&networkTool, &cellInfo](CellSide dir) {
+				uint32_t x = kNextX[dir] + cellInfo.x;
+				uint32_t z = kNextZ[dir] + cellInfo.z;
+				cSC4NetworkCellInfo* result;
+				if (x < networkTool->numCellsX && z < networkTool->numCellsZ) {
+					result = networkTool->GetCellInfo(mkCellXZ(x, z));
+				}
+				return result;
+			};
+			auto &&rf = curveSpec->rf;
+			auto &&vNW = cellInfo.vertices[rotateCorner(NW, rf)];
+			auto &&vSW = cellInfo.vertices[rotateCorner(SW, rf)];
+			auto &&vSE = cellInfo.vertices[rotateCorner(SE, rf)];
+			auto &&vNE = cellInfo.vertices[rotateCorner(NE, rf)];
+			auto &&ti = cSC4NetworkTool::sNetworkTypeInfo[networkType];
+			switch (curveSpec->curveType) {
+				case Diagonal:  // rewriting constraints for pure diagonals so that smoothness constraints stay within the same cell
+				case Curve45DoubleKink:
+					networkTool->InsertEqualityConstraint(vNW, vSE);
+					networkTool->InsertSlopeConstraint(vNW, vNE, ti.slopeDiag);
+					networkTool->InsertSlopeConstraint(vNW, vSW, ti.slopeDiag);
+					networkTool->InsertSmoothnessConstraint(vNE, vNW, vSW, ti.smoothnessDiag);
+					break;
+				case Curve45Diag:
+					// For better slope conformance, we skip equality constraints for this cell, so all vertices can have different heights. Instead, we add more slope constraints.
+					networkTool->InsertSlopeConstraint(vNE, vNW, ti.slopeDiag / 2);
+					networkTool->InsertSlopeConstraint(vNW, vSW, ti.slopeDiag / 2);
+					networkTool->InsertSlopeConstraint(vNE, vSE, ti.slopeDiag);  // same slope as on adjacent diagonal cell
+					networkTool->InsertSlopeConstraint(vSE, vSW, ti.slopeDiag);
+					networkTool->InsertSmoothnessConstraint(vNE, vNW, vSW, ti.smoothnessDiag);
+					// Adding smoothness constraints involving the neighboring cells frequently leads to red drags for this cell, so we don't do that.
+					break;
+				case Curve45Orth:
+					networkTool->InsertEqualityConstraint(vNW, vNE);
+					networkTool->InsertEqualityConstraint(vSW, vSE);
+					networkTool->InsertSlopeConstraint(vNW, vSW, ti.slopeOrth);
+					{
+						auto &&adjCellOrth = getAdjacentCell(rotateSide(North, rf));
+						if (adjCellOrth != nullptr && !adjCellOrth->isNetworkLot) {
+							networkTool->InsertSmoothnessConstraint(vSW, vNW, adjCellOrth->vertices[rotateCorner(NW, rf)], ti.smoothnessOrth);
+						}
+						auto &&adjCellBlend = getAdjacentCell(rotateSide(South, rf));
+						if (adjCellBlend != nullptr && !adjCellBlend->isNetworkLot) {
+							networkTool->InsertSmoothnessConstraint(  // for outside curve
+									isFlipped(rf) ? vNE : vNW,
+									isFlipped(rf) ? vSE : vSW,
+									adjCellBlend->vertices[rotateCorner(isFlipped(rf) ? SE : SW, rf)],
+									ti.smoothnessOrth);
+						}
+					}
+					break;
+				case Curve45Kink:
+					networkTool->InsertEqualityConstraint(vNE, vSE);
+					networkTool->InsertSlopeConstraint(vNE, vNW, ti.slopeDiag / 2);
+					networkTool->InsertSlopeConstraint(vNW, vSW, ti.slopeDiag / 2);
+					networkTool->InsertSmoothnessConstraint(vNE, vNW, vSW, ti.smoothnessDiag);
+					{
+						auto &&adjCellOrth = getAdjacentCell(rotateSide(East, rf));
+						if (adjCellOrth != nullptr && !adjCellOrth->isNetworkLot) {
+							networkTool->InsertSmoothnessConstraint(vSW, vSE, adjCellOrth->vertices[rotateCorner(SE, rf)], ti.smoothnessOrth);
+						}
+					}
+					break;
+				default:
+					break;
 			}
 		}
 		else if (!isFalsie && (
