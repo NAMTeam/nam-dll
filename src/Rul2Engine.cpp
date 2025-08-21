@@ -19,16 +19,7 @@
 #include "RuleEquivalence.h"
 #include <utility>
 
-struct tSolvedCell
-{
-	uint32_t id;
-	RotFlip rf;
-	uint32_t xz;
-};
-static_assert(sizeof(tSolvedCell) == 0xc);
-static_assert(offsetof(tSolvedCell, xz) == 0x8);
-
-std::ostream& operator<<(std::ostream& os, const tSolvedCell& t)
+std::ostream& operator<<(std::ostream& os, const cSC4NetworkTool::tSolvedCell& t)
 {
     return os << "0x" << std::hex << t.id << "," << (t.rf & 0xff) << ":(" << (t.xz & 0xffff) << "," << (t.xz >> 16) << ")";
 }
@@ -57,7 +48,7 @@ namespace
 	std::unordered_set<cSC4NetworkTileConflictRule, RuleEquivalenceHash, RuleEquivalence> sTileConflictRules2 = {};
 
 	enum Rul2PatchResult : uint32_t { NoMatch, Matched, Prevent };
-	typedef Rul2PatchResult (__thiscall* pfn_cSC4NetworkTool_PatchTilePair)(cSC4NetworkTool* pThis, MultiMapRange const& range, tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir);
+	typedef Rul2PatchResult (__thiscall* pfn_cSC4NetworkTool_PatchTilePair)(cSC4NetworkTool* pThis, MultiMapRange const& range, cSC4NetworkTool::tSolvedCell& cell1, cSC4NetworkTool::tSolvedCell& cell2, int8_t dir);
 	pfn_cSC4NetworkTool_PatchTilePair PatchTilePair = reinterpret_cast<pfn_cSC4NetworkTool_PatchTilePair>(0x6337e0);
 
 	void addRuleOverride(cSC4NetworkTileConflictRule* rule) {
@@ -75,7 +66,7 @@ namespace
 	}
 
 	// Lookup an override rule matching the two tiles and apply it if it exists.
-	Rul2PatchResult PatchTilePair2(tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir)
+	Rul2PatchResult PatchTilePair2(cSC4NetworkTool::tSolvedCell& cell1, cSC4NetworkTool::tSolvedCell& cell2, int8_t dir)
 	{
 		// First we need to convert the absolute rotations of cell1 and cell2 to the relative rotations of RUL2:
 		// dir = 0 (cell2 is west of cell1)
@@ -174,13 +165,13 @@ namespace
 	// The override is then applied from the first to the last tile.
 	// This avoids the need for direct adjacencies between the two tiles.
 	// For diagonals, this employs two surrogate tiles instead of one.
-	Rul2PatchResult tryAdjacencies(tSolvedCell& cell1, tSolvedCell& cell2, int8_t dir)
+	Rul2PatchResult tryAdjacencies(cSC4NetworkTool::tSolvedCell& cell1, cSC4NetworkTool::tSolvedCell& cell2, int8_t dir)
 	{
 		for (auto&& surrogate : orthogonalSurrogateTiles) {
 			for (auto&& opposite : {false, true}) {
-				tSolvedCell a = cell1;
-				tSolvedCell b = {surrogate.id, relativeToAbsolute(surrogate.rf, opposite ? dir+2 : dir), 0xffffffff};
-				tSolvedCell c = cell2;
+				cSC4NetworkTool::tSolvedCell a = cell1;
+				cSC4NetworkTool::tSolvedCell b = {surrogate.id, relativeToAbsolute(surrogate.rf, opposite ? dir+2 : dir), 0xffffffff};
+				cSC4NetworkTool::tSolvedCell c = cell2;
 
 				Rul2PatchResult result = PatchTilePair2(a, b, dir);
 				if (result != Matched ||
@@ -189,7 +180,7 @@ namespace
 					// TODO also check that b has changed?
 					continue;  // next surrogate tile
 				}
-				tSolvedCell bBackup = b;
+				cSC4NetworkTool::tSolvedCell bBackup = b;
 
 				result = PatchTilePair2(b, c, dir);
 				if (result != Matched ||
@@ -207,10 +198,10 @@ namespace
 
 		for (auto&& surrogatePair : diagonalSurrogateTiles) {
 			for (auto&& southBound : {true, false}) {
-				tSolvedCell a = cell1;
-				tSolvedCell b = {surrogatePair.first.id, relativeToAbsolute(surrogatePair.first.rf, southBound ? dir : dir+1), 0xffffffff};
-				tSolvedCell c = {surrogatePair.second.id, relativeToAbsolute(surrogatePair.second.rf, southBound ? dir : dir+1), 0xffffffff};
-				tSolvedCell d = cell2;
+				cSC4NetworkTool::tSolvedCell a = cell1;
+				cSC4NetworkTool::tSolvedCell b = {surrogatePair.first.id, relativeToAbsolute(surrogatePair.first.rf, southBound ? dir : dir+1), 0xffffffff};
+				cSC4NetworkTool::tSolvedCell c = {surrogatePair.second.id, relativeToAbsolute(surrogatePair.second.rf, southBound ? dir : dir+1), 0xffffffff};
+				cSC4NetworkTool::tSolvedCell d = cell2;
 
 				Rul2PatchResult result = PatchTilePair2(a, b, dir);
 				if (result != Matched ||
@@ -218,7 +209,7 @@ namespace
 					a.id == b.id) {  // a must not be a straight diagonal override network
 					continue;
 				}
-				tSolvedCell bBackup = b;
+				cSC4NetworkTool::tSolvedCell bBackup = b;
 
 				// Assuming dir == 2, then c is south of b if southBound (dir+1) or north of b if northBound (dir-1).
 				result = PatchTilePair2(b, c, (dir + (southBound ? 1 : -1)) & 3);
@@ -227,7 +218,7 @@ namespace
 					c.id == cell1.id && c.rf == cell1.rf) {  // otherwise we haven't gone anywhere
 					continue;
 				}
-				tSolvedCell cBackup = c;
+				cSC4NetworkTool::tSolvedCell cBackup = c;
 
 				result = PatchTilePair2(c, d, dir);
 				if (result != Matched ||
@@ -246,7 +237,7 @@ namespace
 		return NoMatch;
 	}
 
-	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, SC4Vector<tSolvedCell>& cellsBuffer)
+	bool AdjustTileSubsets2(cSC4NetworkTool* networkTool, SC4Vector<cSC4NetworkTool::tSolvedCell>& cellsBuffer)
 	{
 		// if (sTileConflictRules == nullptr) {
 		// 	return true;  // success as RUL2 file was not yet loaded
@@ -260,7 +251,7 @@ namespace
 		if (cellsBuffer.empty()) {
 			return true;
 		}
-		tSolvedCell* cell = cellsBuffer.begin();
+		cSC4NetworkTool::tSolvedCell* cell = cellsBuffer.begin();
 		bool foundMatch = false;
 
 		int32_t countPatchesCurrentCell = 0;
@@ -277,8 +268,8 @@ mainLoop:
 						continue;  // next direction
 					}
 
-					tSolvedCell temp;
-					tSolvedCell* cell2 = nullptr;
+					cSC4NetworkTool::tSolvedCell temp;
+					cSC4NetworkTool::tSolvedCell* cell2 = nullptr;
 					bool isCell2StackLocal = false;
 
 					if (cell2Info->idxInCellsBuffer < 0) {
