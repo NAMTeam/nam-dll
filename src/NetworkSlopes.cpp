@@ -8,6 +8,7 @@
 #include "RotFlip.h"
 
 #define NW_MASK(n) (1 << cISC4NetworkOccupant::eNetworkType::n)
+constexpr uint32_t allNetworksMask = 0x1fff;  // 13 networks
 
 struct IntersectionFlags {
 	uint32_t networkTypeFlags;
@@ -149,7 +150,7 @@ namespace
 	}
 
 	bool isMultiType(const cSC4NetworkCellInfo &cellInfo) {
-		return (cellInfo.networkTypeFlags & cellInfo.networkTypeFlags - 1) != 0;
+		return (cellInfo.networkTypeFlags & cellInfo.networkTypeFlags - 1 & allNetworksMask) != 0;
 	}
 
 	bool isPureDiag(uint32_t edgeFlags) {
@@ -202,7 +203,7 @@ namespace
 			auto networkType2 = cSC4NetworkTool::GetFirstNetworkTypeFromFlags(cellInfo.networkTypeFlags & cellInfo.networkTypeFlags - 1);
 			auto edgeFlags1 = cellInfo.edgesPerNetwork[networkType];
 			auto edgeFlags2 = cellInfo.edgesPerNetwork[networkType2];
-			IntersectionFlags key = {.networkTypeFlags = cellInfo.networkTypeFlags, .edgeFlags1 = edgeFlags1, .edgeFlags2 = edgeFlags2};
+			IntersectionFlags key = {.networkTypeFlags = cellInfo.networkTypeFlags & allNetworksMask, .edgeFlags1 = edgeFlags1, .edgeFlags2 = edgeFlags2};
 			if (auto search = onslopePieces.find(key); search != onslopePieces.end()) {
 				onslopeSpec = &search->second;
 				if (!onslopeSpec->firstIsMain) {
@@ -346,7 +347,7 @@ namespace
 						auto adjNetwork1 = cSC4NetworkTool::GetFirstNetworkTypeFromFlags(adjCellInfo->networkTypeFlags);
 						auto adjNetwork2 = cSC4NetworkTool::GetFirstNetworkTypeFromFlags(adjCellInfo->networkTypeFlags & adjCellInfo->networkTypeFlags - 1);
 						result = onslopePieces.contains({
-								.networkTypeFlags = adjCellInfo->networkTypeFlags,
+								.networkTypeFlags = adjCellInfo->networkTypeFlags & allNetworksMask,
 								.edgeFlags1 = adjCellInfo->edgesPerNetwork[adjNetwork1],
 								.edgeFlags2 = adjCellInfo->edgesPerNetwork[adjNetwork2]});
 					}
