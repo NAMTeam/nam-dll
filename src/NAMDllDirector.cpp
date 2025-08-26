@@ -20,6 +20,7 @@
 
 #include "Check4GBPatch.h"
 #include "Logger.h"
+#include "Settings.h"
 #include "SC4VersionDetection.h"
 #include "version.h"
 #include "cIGZCOM.h"
@@ -64,6 +65,7 @@ static constexpr uint32_t kGZWin_SC4View3DWin = 0x9a47b417;
 static constexpr uint32_t kGZIID_cISC4View3DWin = 0xFA47B3F9;
 
 static constexpr std::string_view PluginLogFileName = "NAM.log";
+static constexpr std::string_view SettingsFileName = "NAM.ini";
 
 static uint32_t DoTunnelChanged_InjectPoint;
 static uint32_t DoTunnelChanged_ContinueJump;
@@ -83,71 +85,23 @@ namespace
 
 	void InstallDiagonalStreetsPatch()
 	{
-		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			Patching::OverwriteMemory((void*)0x637f80, (uint8_t)0xeb);
-			Patching::OverwriteMemory((void*)0x63aff2, (uint8_t)0xeb);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Draggable Diagonal Streets patch.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Draggable Diagonal Streets patch.\n%s",
-				e.what());
-		}
+		Patching::OverwriteMemory((void*)0x637f80, (uint8_t)0xeb);
+		Patching::OverwriteMemory((void*)0x63aff2, (uint8_t)0xeb);
 	}
 
 	void InstallDisableAutoconnectForStreetsPatch()
 	{
-		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			Patching::OverwriteMemory((void*)0x729fff, (uint8_t)0x00);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Disable auto-connect for RHW and Streets patch.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Disable auto-connect for RHW and Streets patch.\n%s",
-				e.what());
-		}
+		Patching::OverwriteMemory((void*)0x729fff, (uint8_t)0x00);
 	}
 
 	void InstallFerryBridgeHeightPatch()
 	{
-		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			// Replace the address of the float value that the game uses for its minimum
-			// ferry bridge height calculation with a pointer to our own float value.
-			//
-			// SC4's default minimum ferry bridge height is 30 meters above sea level,
-			// we replace that with a value that sets it to 20 meters above sea level.
-			Patching::OverwriteMemory((void*)0x6459bc, (uint32_t)&FerryMinimumBridgeHeight);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Ferry Bridge Height patch.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Ferry Bridge Height patch.\n%s",
-				e.what());
-		}
+		// Replace the address of the float value that the game uses for its minimum
+		// ferry bridge height calculation with a pointer to our own float value.
+		//
+		// SC4's default minimum ferry bridge height is 30 meters above sea level,
+		// we replace that with a value that sets it to 20 meters above sea level.
+		Patching::OverwriteMemory((void*)0x6459bc, (uint32_t)&FerryMinimumBridgeHeight);
 	}
 
 	// TODO Currently this function is invoked with JMP+RET which can lead to suboptimal branch prediction due to imbalanced CALL+RET operations.
@@ -205,57 +159,37 @@ noMatchingTunnelNetwork:
 		}
 	}
 
-	void InstallTunnelsPatch(const uint16_t gameVersion)
+	void InstallTunnelsPatch()
+	{
+		DoTunnelChanged_InjectPoint = 0x714222;
+		DoTunnelChanged_ContinueJump = 0x714238;
+		DoTunnelChanged_ReturnJump = 0x714398;
+		Patching::InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
+	}
+
+	template <typename F>
+	void InstallWhen(bool when, const std::string_view &name, F&& installPatch)
 	{
 		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			switch (gameVersion)
-			{
-				case 641:
-					DoTunnelChanged_InjectPoint = 0x714222;
-					DoTunnelChanged_ContinueJump = 0x714238;
-					DoTunnelChanged_ReturnJump = 0x714398;
-					break;
-				default:
-					return;
-			}
-			Patching::InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Tunnels patch for RHW, Street and Lightrail.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Tunnels patch for RHW, Street and Lightrail.\n%s",
-				e.what());
+		if (!when) {
+			logger.WriteLineFormatted(LogLevel::Info, "Skipped installing the %s.", name);
+		} else try {
+			installPatch();
+			logger.WriteLineFormatted(LogLevel::Info, "Installed the %s.", name);
+		} catch (const wil::ResultException& e) {
+			logger.WriteLineFormatted(LogLevel::Error, "Failed to install the %s.\n%s", name, e.what());
 		}
 	}
 
-	void InstallMemoryPatches(const uint16_t gameVersion)
+	void InstallNamPatches(const Settings &settings)
 	{
-		Logger& logger = Logger::GetInstance();
-		// Patch the game's memory to enable a few NAM features.
-		InstallDiagonalStreetsPatch();
-		InstallDisableAutoconnectForStreetsPatch();
-		InstallFerryBridgeHeightPatch();
-		InstallTunnelsPatch(gameVersion);
-		try {
-			logger.WriteLine(LogLevel::Info, "Installing the RUL2 Engine patch.");
-			Rul2Engine::Install();
-			logger.WriteLine(LogLevel::Info, "Installing the Network Slopes patch.");
-			NetworkSlopes::Install();
-			logger.WriteLine(LogLevel::Info, "Installing the FLEX Puzzle Piece RUL0 patch.");
-			FlexPieces::Install();
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(LogLevel::Error, "Failed to install the last patch.\n%s", e.what());
-		}
+		InstallWhen(settings.enableDiagonalStreets, "Draggable Diagonal Streets patch", InstallDiagonalStreetsPatch);
+		InstallWhen(settings.disableAutoconnect, "Disable auto-connect for RHW and Streets patch", InstallDisableAutoconnectForStreetsPatch);
+		InstallWhen(settings.enableTunnels, "Tunnels patch for RHW, Street and Lightrail", InstallTunnelsPatch);
+		InstallWhen(settings.reduceFerryBridgeHeightPatch, "Ferry Bridge Height patch", InstallFerryBridgeHeightPatch);
+		InstallWhen(settings.enableRUL2EnginePatch, "RUL2 Engine patch", Rul2Engine::Install);
+		InstallWhen(settings.enableNetworkSlopePatch, "Network Slopes patch", NetworkSlopes::Install);
+		InstallWhen(settings.enableFlexPuzzlePiecePatch, "FLEX Puzzle Piece RUL0 patch", FlexPieces::Install);
 	}
 }
 
@@ -263,15 +197,10 @@ class NAMDllDirector final : public cRZMessage2COMDirector
 {
 public:
 
-	NAMDllDirector()
+	NAMDllDirector() : settings()
 	{
-		std::filesystem::path dllFolderPath = GetDllFolderPath();
-
-		std::filesystem::path logFilePath = dllFolderPath;
-		logFilePath /= PluginLogFileName;
-
 		Logger& logger = Logger::GetInstance();
-		logger.Init(logFilePath, LogLevel::Error);
+		logger.Init(GetDllFolderPath() / PluginLogFileName, LogLevel::Error);
 		logger.WriteLogFileHeader("NAM DLL v" PLUGIN_VERSION_STR);
 		Check4GBPatch::WritePatchStatusToLogFile();
 	}
@@ -363,8 +292,14 @@ public:
 
 	void PostCityInit(cIGZMessage2Standard* pStandardMessage)
 	{
-		RegisterKeyboardShortcuts();
 		RegisterDllVersionInLua();
+		static bool logged = false;  // write log only once
+		if (!logged) {
+			InstallWhen(settings.enableKeyboardShortcuts, "Keyboard Shortcuts for Monorail, Onewayroad, Groundhighway, RHW", [this](){ this->RegisterKeyboardShortcuts(); });
+			logged = true;
+		} else {
+			RegisterKeyboardShortcuts();
+		}
 	}
 
 	void ProcessKeyboardShortcut(uint32_t dwMessageID)
@@ -461,11 +396,12 @@ public:
 
 	bool OnStart(cIGZCOM* pCOM)
 	{
+		settings.Load(GetDllFolderPath() / SettingsFileName);
 		const uint16_t gameVersion = versionDetection.GetGameVersion();
 
 		if (gameVersion == 641)
 		{
-			InstallMemoryPatches(gameVersion);
+			InstallNamPatches(settings);
 
 			cIGZFrameWork* const pFramework = RZGetFrameWork();
 			if (pFramework->GetState() < cIGZFrameWork::kStatePreAppInit)
@@ -482,7 +418,7 @@ public:
 			Logger& logger = Logger::GetInstance();
 			logger.WriteLineFormatted(
 				LogLevel::Error,
-				"The memory patches require game version 641, found game version %d.",
+				"The NAM patches require game version 641, found game version %d.",
 				gameVersion);
 		}
 		return true;
@@ -491,6 +427,7 @@ public:
 private:
 
 	const SC4VersionDetection versionDetection;
+	Settings settings;
 };
 
 cRZCOMDllDirector* RZGetCOMDllDirector() {

@@ -54,6 +54,8 @@ The plugin may work on Windows 7 or later with the [Microsoft Visual C++ 2022 x8
 The plugin should write a `NAM.log` file in the same folder as the plugin.
 The log contains status information for the most recent run of the plugin.
 
+For debugging purposes, individual features of the DLL can be disabled in the [NAM.ini](src/NAM.ini) configuration file.
+
 # License
 
 This project is licensed under the terms of the GNU Lesser General Public License version 3.0.
@@ -63,6 +65,7 @@ See [LICENSE.txt](LICENSE.txt) for more information.
 
 [gzcom-dll](https://github.com/nsgomez/gzcom-dll/tree/master) MIT License.
 [Windows Implementation Library](https://github.com/microsoft/wil) MIT License.
+[mINI](https://github.com/metayeti/mINI) MIT License.
 [SC4Fix](https://github.com/nsgomez/sc4fix) MIT License.
 
 # Source Code
