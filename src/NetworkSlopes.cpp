@@ -78,19 +78,16 @@ namespace
 		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040004, 0x04010000}, {West, roadHtL2, false}},  // L2 RHW2 OST diag upper
 		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040004, 0x00030400}, {West, roadHtL2, false}},  // L2 RHW2 OST diag upper flipped
 		// Rail
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040404, 0x00020002}, {West, railHtL1,  true}},  // L1 Rail OST
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040402, 0x00020000}, {West, railHtL2,  true}},  // L2 Rail OST
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x04040400, 0x03010000}, {West, railHtL1,  true}},  // L1 Rail OST diag upper
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x04040400, 0x00030100}, {West, railHtL1,  true}},  // L1 Rail OST diag upper flipped
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00000304, 0x03010000}, {West, railHtL1,  true}},  // L1 Rail OST diag lower
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x01000004, 0x00030100}, {West, railHtL1,  true}},  // L1 Rail OST diag lower flipped
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x03040004, 0x00010000}, {West, railHtL2,  true}},  // L2 Rail OST diag upper
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040104, 0x00030000}, {West, railHtL2,  true}},  // L2 Rail OST diag upper flipped
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040301, 0x03010000}, {West, railHtL2,  true}},  // L2 Rail OST diag lower
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x01040003, 0x00030100}, {West, railHtL2,  true}},  // L2 Rail OST diag lower flipped
-		// HRW
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04020402, 0x02040304}, {West, railHtL1,  true}},  // L1 HRW OST (orth and diag)
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04020402, 0x01040204}, {West, railHtL2,  true}},  // L2 HRW OST (orth and diag)
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00020404, 0x00000002}, {West, railHtL1,  true}},  // L1 Rail OST
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040402, 0x00020000}, {West, railHtL2,  true}},  // L2 Rail OST
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04010400, 0x03040000}, {West, railHtL1,  true}},  // L1 Rail OST diag upper
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04030400, 0x00040100}, {West, railHtL1,  true}},  // L1 Rail OST diag upper flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00000304, 0x03010000}, {West, railHtL1,  true}},  // L1 Rail OST diag lower
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x01000004, 0x00030100}, {West, railHtL1,  true}},  // L1 Rail OST diag lower flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x03040004, 0x00010000}, {West, railHtL2,  true}},  // L2 Rail OST diag upper
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040104, 0x00030000}, {West, railHtL2,  true}},  // L2 Rail OST diag upper flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040301, 0x03010000}, {West, railHtL2,  true}},  // L2 Rail OST diag lower
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x01040003, 0x00030100}, {West, railHtL2,  true}},  // L2 Rail OST diag lower flipped
 	};
 
 	std::unordered_map<IntersectionFlags, OnslopeSpec> initOnslopePiecesWithRotations() {
