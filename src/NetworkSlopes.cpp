@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <functional>
 #include <bit>
+#include <optional>
 #include "RotFlip.h"
 
 #define NW_MASK(n) (1 << cISC4NetworkOccupant::eNetworkType::n)
@@ -50,6 +51,7 @@ namespace
 		CellSide groundSide;
 		float height;
 		bool firstIsMain;
+		std::optional<CellCorner> variableCorner;  // can be at ground or elevated side for diagonal OSTs
 	};
 
 	constexpr float roadHtL1 = 7.5, roadHtL2 = 15.0;
@@ -58,45 +60,52 @@ namespace
 	// the flags must have the same order as in RUL1 (so must not be swapped)
 	const std::unordered_map<IntersectionFlags, OnslopeSpec> onslopePiecesPartial = {
 		// viaducts
-		{{NW_MASK(Road)      | NW_MASK(DirtRoad),   0x00040004, 0x00020001}, {West, roadHtL1,  true}},  // L1 Road OST
-		{{NW_MASK(Road)      | NW_MASK(DirtRoad),   0x00040004, 0x00020003}, {West, roadHtL2,  true}},  // L2 Road OST
-		{{NW_MASK(Rail)      | NW_MASK(OneWayRoad), 0x00040000, 0x00020002}, {West, roadHtL1, false}},  // L1 OWR OST
-		{{NW_MASK(LightRail) | NW_MASK(OneWayRoad), 0x00040000, 0x00020002}, {West, roadHtL2, false}},  // L2 OWR OST
-		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x04040004, 0x00020001}, {West, roadHtL1,  true}},  // L1 Avenue OST
-		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x00040404, 0x00020003}, {West, roadHtL1,  true}},  // L1 Avenue OST flipped
-		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x04040004, 0x00010002}, {West, roadHtL2,  true}},  // L2 Avenue OST
-		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x00040404, 0x00030002}, {West, roadHtL2,  true}},  // L2 Avenue OST flipped
+		{{NW_MASK(Road)      | NW_MASK(DirtRoad),   0x00040004, 0x00020001}, {West, roadHtL1,  true, {}}},  // L1 Road OST
+		{{NW_MASK(Road)      | NW_MASK(DirtRoad),   0x00040004, 0x00020003}, {West, roadHtL2,  true, {}}},  // L2 Road OST
+		{{NW_MASK(Rail)      | NW_MASK(OneWayRoad), 0x00040000, 0x00020002}, {West, roadHtL1, false, {}}},  // L1 OWR OST
+		{{NW_MASK(LightRail) | NW_MASK(OneWayRoad), 0x00040000, 0x00020002}, {West, roadHtL2, false, {}}},  // L2 OWR OST
+		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x04040004, 0x00020001}, {West, roadHtL1,  true, {}}},  // L1 Avenue OST
+		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x00040404, 0x00020003}, {West, roadHtL1,  true, {}}},  // L1 Avenue OST flipped
+		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x04040004, 0x00010002}, {West, roadHtL2,  true, {}}},  // L2 Avenue OST
+		{{NW_MASK(Avenue)    | NW_MASK(DirtRoad),   0x00040404, 0x00030002}, {West, roadHtL2,  true, {}}},  // L2 Avenue OST flipped
 		// RHW
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040000, 0x00020002}, {West, roadHtL1, false}},  // L1 RHW2 OST
-		{{NW_MASK(Monorail)  | NW_MASK(DirtRoad),   0x00040000, 0x00020002}, {West, roadHtL2, false}},  // L2 RHW2 OST
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00000004, 0x00000401}, {West, roadHtL1, false}},  // L1 RHW2 OST diag lower
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00000004, 0x04000003}, {West, roadHtL1, false}},  // L1 RHW2 OST diag lower flipped
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x04040400, 0x04010000}, {West, roadHtL1, false}},  // L1 RHW2 OST diag upper
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x04040400, 0x00030400}, {West, roadHtL1, false}},  // L1 RHW2 OST diag upper flipped
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040000, 0x00000401}, {West, roadHtL2, false}},  // L2 RHW2 OST diag lower
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040000, 0x04000003}, {West, roadHtL2, false}},  // L2 RHW2 OST diag lower flipped
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040004, 0x04010000}, {West, roadHtL2, false}},  // L2 RHW2 OST diag upper
-		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040004, 0x00030400}, {West, roadHtL2, false}},  // L2 RHW2 OST diag upper flipped
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040000, 0x00020002}, {West, roadHtL1, false, {}}},  // L1 RHW2 OST
+		{{NW_MASK(Monorail)  | NW_MASK(DirtRoad),   0x00040000, 0x00020002}, {West, roadHtL2, false, {}}},  // L2 RHW2 OST
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00000004, 0x00000401}, {West, roadHtL1, false, SE}},  // L1 RHW2 OST diag lower
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00000004, 0x04000003}, {West, roadHtL1, false, NE}},  // L1 RHW2 OST diag lower flipped
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x04040400, 0x04010000}, {West, roadHtL1, false, NW}},  // L1 RHW2 OST diag upper
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x04040400, 0x00030400}, {West, roadHtL1, false, SW}},  // L1 RHW2 OST diag upper flipped
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040000, 0x00000401}, {West, roadHtL2, false, SE}},  // L2 RHW2 OST diag lower
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040000, 0x04000003}, {West, roadHtL2, false, NE}},  // L2 RHW2 OST diag lower flipped
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040004, 0x04010000}, {West, roadHtL2, false, NW}},  // L2 RHW2 OST diag upper
+		{{NW_MASK(Rail)      | NW_MASK(DirtRoad),   0x00040004, 0x00030400}, {West, roadHtL2, false, SW}},  // L2 RHW2 OST diag upper flipped
 		// Rail
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00020404, 0x00000002}, {West, railHtL1,  true}},  // L1 Rail OST
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040402, 0x00020000}, {West, railHtL2,  true}},  // L2 Rail OST
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04010400, 0x03040000}, {West, railHtL1,  true}},  // L1 Rail OST diag upper
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04030400, 0x00040100}, {West, railHtL1,  true}},  // L1 Rail OST diag upper flipped
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00000304, 0x03010000}, {West, railHtL1,  true}},  // L1 Rail OST diag lower
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x01000004, 0x00030100}, {West, railHtL1,  true}},  // L1 Rail OST diag lower flipped
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x03040004, 0x00010000}, {West, railHtL2,  true}},  // L2 Rail OST diag upper
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040104, 0x00030000}, {West, railHtL2,  true}},  // L2 Rail OST diag upper flipped
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040301, 0x03010000}, {West, railHtL2,  true}},  // L2 Rail OST diag lower
-		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x01040003, 0x00030100}, {West, railHtL2,  true}},  // L2 Rail OST diag lower flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00020404, 0x00000002}, {West, railHtL1,  true, {}}},  // L1 Rail OST
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040402, 0x00020000}, {West, railHtL2,  true, {}}},  // L2 Rail OST
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00000304, 0x03010000}, {West, railHtL1,  true, SE}},  // L1 Rail OST diag lower
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x01000004, 0x00030100}, {West, railHtL1,  true, NE}},  // L1 Rail OST diag lower flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04010400, 0x03040000}, {West, railHtL1,  true, NW}},  // L1 Rail OST diag upper
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x04030400, 0x00040100}, {West, railHtL1,  true, SW}},  // L1 Rail OST diag upper flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040301, 0x03010000}, {West, railHtL2,  true, SE}},  // L2 Rail OST diag lower
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x01040003, 0x00030100}, {West, railHtL2,  true, NE}},  // L2 Rail OST diag lower flipped
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x03040004, 0x00010000}, {West, railHtL2,  true, NW}},  // L2 Rail OST diag upper
+		{{NW_MASK(Rail)      | NW_MASK(Monorail),   0x00040104, 0x00030000}, {West, railHtL2,  true, SW}},  // L2 Rail OST diag upper flipped
 	};
 
 	std::unordered_map<IntersectionFlags, OnslopeSpec> initOnslopePiecesWithRotations() {
 		std::unordered_map<IntersectionFlags, OnslopeSpec> onslopePieces = {};
+		auto rotateSpec = [](OnslopeSpec spec, RotFlip rf) {
+			return OnslopeSpec{
+				rotateSide(spec.groundSide, rf),
+				spec.height,
+				spec.firstIsMain,
+				spec.variableCorner ? std::optional<CellCorner>{rotateCorner(*spec.variableCorner, rf)} : std::nullopt};
+		};
 		for (auto const& [key, value] : onslopePiecesPartial) {
 			onslopePieces[key] = value;
-			onslopePieces[{key.networkTypeFlags, std::rotl(key.edgeFlags1,  8), std::rotl(key.edgeFlags2,  8)}] = {rotateSide(value.groundSide, R1F0), value.height, value.firstIsMain};
-			onslopePieces[{key.networkTypeFlags, std::rotl(key.edgeFlags1, 16), std::rotl(key.edgeFlags2, 16)}] = {rotateSide(value.groundSide, R2F0), value.height, value.firstIsMain};
-			onslopePieces[{key.networkTypeFlags, std::rotl(key.edgeFlags1, 24), std::rotl(key.edgeFlags2, 24)}] = {rotateSide(value.groundSide, R3F0), value.height, value.firstIsMain};
+			onslopePieces[{key.networkTypeFlags, std::rotl(key.edgeFlags1,  8), std::rotl(key.edgeFlags2,  8)}] = rotateSpec(value, R1F0);
+			onslopePieces[{key.networkTypeFlags, std::rotl(key.edgeFlags1, 16), std::rotl(key.edgeFlags2, 16)}] = rotateSpec(value, R2F0);
+			onslopePieces[{key.networkTypeFlags, std::rotl(key.edgeFlags1, 24), std::rotl(key.edgeFlags2, 24)}] = rotateSpec(value, R3F0);
 		}
 		return onslopePieces;
 	}
@@ -238,13 +247,27 @@ namespace
 			// larger slope tolerance for onslope pieces
 			auto slope = cSC4NetworkTool::sNetworkTypeInfo[networkType].slopeOrth + onslopeSpec->height;
 			if (onslopeSpec->groundSide == West || onslopeSpec->groundSide == East) {  // x-axis
-				networkTool->InsertEqualityConstraint(cellInfo.vertices[NW], cellInfo.vertices[SW]);
-				networkTool->InsertEqualityConstraint(cellInfo.vertices[NE], cellInfo.vertices[SE]);
-				networkTool->InsertSlopeConstraint(cellInfo.vertices[SW], cellInfo.vertices[SE], slope);
+				if (auto&& c = onslopeSpec->variableCorner) {
+					networkTool->InsertEqualityConstraint(cellInfo.vertices[rotateCorner(*c, R0F1)], cellInfo.vertices[rotateCorner(*c, R2F0)]       );  // vertical opposite
+					networkTool->InsertSlopeConstraint   (cellInfo.vertices[*c                    ], cellInfo.vertices[rotateCorner(*c, R2F1)], slope);  // vertical
+					networkTool->InsertSlopeConstraint   (cellInfo.vertices[*c                    ], cellInfo.vertices[rotateCorner(*c, R0F1)], slope);  // horizontal
+					networkTool->InsertSlopeConstraint   (cellInfo.vertices[rotateCorner(*c, R2F1)], cellInfo.vertices[rotateCorner(*c, R2F0)], slope);  // horizontal opposite
+				} else {
+					networkTool->InsertEqualityConstraint(cellInfo.vertices[NW], cellInfo.vertices[SW]);  // vertical
+					networkTool->InsertEqualityConstraint(cellInfo.vertices[NE], cellInfo.vertices[SE]);  // vertical
+					networkTool->InsertSlopeConstraint(cellInfo.vertices[SW], cellInfo.vertices[SE], slope);  // horizontal
+				}
 			} else {  // z-axis
-				networkTool->InsertEqualityConstraint(cellInfo.vertices[SE], cellInfo.vertices[SW]);
-				networkTool->InsertEqualityConstraint(cellInfo.vertices[NE], cellInfo.vertices[NW]);
-				networkTool->InsertSlopeConstraint(cellInfo.vertices[SE], cellInfo.vertices[NE], slope);
+				if (auto&& c = onslopeSpec->variableCorner) {
+					networkTool->InsertEqualityConstraint(cellInfo.vertices[rotateCorner(*c, R2F1)], cellInfo.vertices[rotateCorner(*c, R2F0)]       );  // horizontal opposite
+					networkTool->InsertSlopeConstraint   (cellInfo.vertices[*c                    ], cellInfo.vertices[rotateCorner(*c, R0F1)], slope);  // horizontal
+					networkTool->InsertSlopeConstraint   (cellInfo.vertices[*c                    ], cellInfo.vertices[rotateCorner(*c, R2F1)], slope);  // vertical
+					networkTool->InsertSlopeConstraint   (cellInfo.vertices[rotateCorner(*c, R0F1)], cellInfo.vertices[rotateCorner(*c, R2F0)], slope);  // vertical opposite
+				} else {
+					networkTool->InsertEqualityConstraint(cellInfo.vertices[SE], cellInfo.vertices[SW]);  // horizontal
+					networkTool->InsertEqualityConstraint(cellInfo.vertices[NE], cellInfo.vertices[NW]);  // horizontal
+					networkTool->InsertSlopeConstraint(cellInfo.vertices[SE], cellInfo.vertices[NE], slope);  // vertical
+				}
 			}
 		}
 		else if (curveSpec != nullptr)
