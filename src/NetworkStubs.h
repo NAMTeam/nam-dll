@@ -2,6 +2,9 @@
 #include <cstdint>
 #include "cISC4NetworkOccupant.h"
 #include "SC4Vector.h"
+#include "SC4HashMap.h"
+#include "SC4Point.h"
+#include "RotFlip.h"
 
 // The RESERVED macro provides names for reserved or unknown struct fields
 #define _CONCATNAM(x,y) x ## y
@@ -82,6 +85,34 @@ class cSC4NetworkTool
 		};
 		static_assert(sizeof(tCrossSection) == 0x8);
 
+		struct tDraggedStep
+		{
+			uint8_t RESERVED[4];
+			uint32_t draggedCellsIndex;
+			uint32_t stepType;  // 0: regular/non-immovable, 1: bridge, 2: tunnel, 3: reserved
+		};
+		static_assert(sizeof(tDraggedStep) == 0xc);
+
+		struct tSolvedCell
+		{
+			uint32_t id;
+			RotFlip rf;
+			uint32_t xz;
+		};
+		static_assert(sizeof(tSolvedCell) == 0xc);
+		static_assert(offsetof(tSolvedCell, xz) == 0x8);
+
+		struct tIntersection
+		{
+			uint32_t hid;
+			SC4Point<int32_t> origin;
+			uint8_t RESERVED[8];
+			uint32_t step;
+			uint8_t RESERVED[4];
+			SC4Vector<int32_t> cells;
+		};
+		static_assert(sizeof(tIntersection) == 0x28);
+
 		static inline cSC4NetworkTypeInfo* const sNetworkTypeInfo = (reinterpret_cast<cSC4NetworkTypeInfo*>(0xb452c8));
 
 		typedef cISC4NetworkOccupant::eNetworkType (*pfn_GetFirstNetworkTypeFromFlags)(uint32_t networkTypeFlags);
@@ -118,7 +149,18 @@ class cSC4NetworkTool
 		void* vtable;
 		intptr_t RESERVED[6];
 		cSC4NetworkWorldCache networkWorldCache;
-		uint8_t RESERVED[0x124 - 28 - 10*4];
+		uint8_t RESERVED[4];
+		intptr_t occupantManager;
+		uint8_t RESERVED[4];
+		bool placeById;
+		uint8_t RESERVED[3];
+		SC4Vector<tDraggedStep> draggedSteps;
+		SC4Vector<SC4Point<uint32_t>> draggedCells;
+		uint8_t RESERVED[0x98 - 0x6c];
+		SC4Vector<tSolvedCell> solvedCells;
+		uint8_t RESERVED[0xcc - 0xa4];
+		SC4Vector<tIntersection> highwayIntersections;
+		uint8_t RESERVED[0x124 - 0xd8];
 		cSC4VertexHtConstraintSatisfier vertexHtConstraintSatisfier1;
 		cSC4VertexHtConstraintSatisfier vertexHtConstraintSatisfier2;
 		uint8_t RESERVED[0x240 - 0x1ec];
@@ -127,5 +169,91 @@ class cSC4NetworkTool
 		uint8_t RESERVED[0x270 - 0x248];
 };
 static_assert(offsetof(cSC4NetworkTool, networkWorldCache) == 0x1c);
+static_assert(offsetof(cSC4NetworkTool, draggedSteps) == 0x54);
+static_assert(offsetof(cSC4NetworkTool, solvedCells) == 0x98);
 static_assert(offsetof(cSC4NetworkTool, vertexHtConstraintSatisfier1) == 0x124);
 static_assert(sizeof(cSC4NetworkTool) == 0x270);
+
+namespace nSC4Networks
+{
+	struct cIntPiece
+	{
+		uint32_t pieceId;
+		uint8_t rot;
+		bool flip;
+		uint8_t RESERVED[2];
+		SC4Point<float> offset;
+	};
+	static_assert(sizeof(cIntPiece) == 0x10);
+
+	struct cIntCheckCell
+	{
+		SC4Point<int32_t> cell;
+		char letter;
+	};
+	static_assert(sizeof(cIntCheckCell) == 0xc);
+
+	struct CheckType
+	{
+		uint8_t networks[2];  // 0xff or eNetworkType
+		uint8_t RESERVED[2];
+		uint32_t edges1;
+		uint32_t mask1;
+		uint32_t edges2;
+		uint32_t mask2;
+		bool isMultiOk;
+		bool isStatic;  // i.e. prebuilt, otherwise `check` (or `optional`)
+		bool isOptional;
+		uint8_t RESERVED;
+	};
+	static_assert(sizeof(CheckType) == 0x18);
+
+	struct cTileDef
+	{
+		uint32_t iidOffset;
+		uint8_t rotFlip;
+		bool isUnnamed;
+		uint8_t RESERVED[2];
+	};
+
+	// RUL0 highway intersection entry
+	struct cIntRule
+	{
+		uint32_t hid;
+		SC4Vector<cIntPiece> pieces;  // usually size=1 (offset and orientation of preview model)
+		SC4Point<int32_t> stepOffsets;
+		SC4Point<int32_t> min;
+		SC4Point<int32_t> max;
+		SC4Vector<SC4Point<int32_t>> unnamedStaticCells;
+		SC4Vector<SC4Point<int32_t>> RESERVED;
+		SC4Point<int32_t> replacementIntersection;
+		bool hasReplacementIntersection;
+		uint8_t RESERVED[3];
+		SC4Vector<SC4Point<int32_t>> staticCells;
+		SC4Vector<cIntCheckCell> checkCells;
+		uint8_t RESERVED[0x68 - 0x64];
+		SC4HashMap<uint8_t, CheckType> checkTypes;
+		uint8_t RESERVED[0x9c - 0x78];
+		SC4Vector<uint8_t> constraints;  // for slopes of static cells
+		uint32_t constraintsGridWidth;
+		SC4Point<int32_t> constraintsOrigin;
+		uint8_t RESERVED[0xb8 - 0xb4];
+		typedef uint8_t AutoTileIndex;
+		SC4Vector<AutoTileIndex> autoTileIndices;  // z*width+x -> 0 or z*0x10+x+1
+		uint32_t autoTileGridWidth;
+		uint32_t autoTileBase;
+		uint32_t autoPathBase;
+		uint8_t RESERVED[0xd4 - 0xd0];
+		SC4HashMap<AutoTileIndex, cTileDef> tileDefs;
+		uint32_t networkFlags;
+		uint8_t oneWayDir;
+		bool autoPlace;
+		uint8_t RESERVED[2];
+		uint32_t hidRotPrev;
+		uint32_t hidRotNext;
+		uint32_t hidTabPrev;
+		uint32_t hidTabNext;
+	};
+	static_assert(offsetof(cIntRule, staticCells) == 0x4c);
+	static_assert(sizeof(cIntRule) == 0xfc);
+}

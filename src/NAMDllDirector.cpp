@@ -47,6 +47,7 @@
 #include "Patching.h"
 #include "Rul2Engine.h"
 #include "NetworkSlopes.h"
+#include "FlexPieces.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -248,6 +249,8 @@ noMatchingTunnelNetwork:
 			Rul2Engine::Install();
 			logger.WriteLine(LogLevel::Info, "Installing the Network Slopes patch.");
 			NetworkSlopes::Install();
+			logger.WriteLine(LogLevel::Info, "Installing the FLEX Puzzle Piece RUL0 patch.");
+			FlexPieces::Install();
 		}
 		catch (const wil::ResultException& e)
 		{

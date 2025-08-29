@@ -20,6 +20,6 @@
 
 #pragma once
 
-#define PLUGIN_VERSION_STR      "1.1.1+slope"
+#define PLUGIN_VERSION_STR      "1.1.1+slope+flex"
 #define RESOURCE_VERSION         1,1,1,0
 #define RESOURCE_VERSION_STR    "1.1.1.0"
