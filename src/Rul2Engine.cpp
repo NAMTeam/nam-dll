@@ -14,15 +14,10 @@
 #include <array>
 #include <algorithm>
 #include "cSC4NetworkTileConflictRule.h"
+#include "NetworkStubs.h"
 #include <unordered_set>
 #include "RuleEquivalence.h"
 #include <utility>
-
-#ifdef __clang__
-#define NAKED_FUN __attribute__((naked))
-#else
-#define NAKED_FUN __declspec(naked)
-#endif
 
 struct tSolvedCell
 {
@@ -38,46 +33,9 @@ std::ostream& operator<<(std::ostream& os, const tSolvedCell& t)
     return os << "0x" << std::hex << t.id << "," << (t.rf & 0xff) << ":(" << (t.xz & 0xffff) << "," << (t.xz >> 16) << ")";
 }
 
-class cSC4NetworkCellInfo
-{
-	public:
-		intptr_t unknown[3];
-		cISC4NetworkOccupant* networkOccupant;
-		uint8_t unknown2[0x43];
-		bool isImmovable;
-		uint8_t unknown3[2];
-		bool isNetworkLot;
-		uint8_t unknown4[168-4-0x43];
-		int32_t idxInCellsBuffer;
-};
-static_assert(offsetof(cSC4NetworkCellInfo, isImmovable) == 0x53);
-static_assert(offsetof(cSC4NetworkCellInfo, isNetworkLot) == 0x56);
-static_assert(offsetof(cSC4NetworkCellInfo, idxInCellsBuffer) == 0xb8);
-
-class cSC4NetworkWorldCache
-{
-	public:
-		intptr_t unknown[10];
-};
-
-namespace
-{
-	typedef cSC4NetworkCellInfo* (__thiscall* pfn_cSC4NetworkWorldCache_GetCell)(cSC4NetworkWorldCache* pThis, uint32_t xz);
-	pfn_cSC4NetworkWorldCache_GetCell GetCell = reinterpret_cast<pfn_cSC4NetworkWorldCache_GetCell>(0x647a20);
-}
-
-class cSC4NetworkTool
-{
-	public:
-		void* vtable;
-		intptr_t unknown[6];
-		cSC4NetworkWorldCache networkWorldCache;
-};
-static_assert(offsetof(cSC4NetworkTool, networkWorldCache) == 0x1c);
-
 struct OverrideRuleNode
 {
-	uint32_t unknown;  // red/black
+	uint32_t RESERVED;  // red/black
 	OverrideRuleNode* next;
 	OverrideRuleNode* childLeft;
 	OverrideRuleNode* childRight;
@@ -93,9 +51,6 @@ struct MultiMapRange
 
 namespace
 {
-	const int32_t kNextX[] = {-1, 0, 1, 0};
-	const int32_t kNextZ[] = {0, -1, 0, 1};
-
 	constexpr int32_t maxRepetitions = 100;
 
 	// OverrideRuleNode* const sTileConflictRules = *(reinterpret_cast<OverrideRuleNode**>(0xb466d0));
@@ -317,7 +272,7 @@ mainLoop:
 					uint32_t x = cell->xz & 0xffff;
 					uint32_t nextCellXZ = (kNextZ[dir] + z) * 0x10000 + (kNextX[dir] + x);
 
-					cSC4NetworkCellInfo* cell2Info = GetCell(&(networkTool->networkWorldCache), nextCellXZ);
+					cSC4NetworkCellInfo* cell2Info = networkTool->networkWorldCache.GetCell(nextCellXZ);
 					if (cell2Info == nullptr) {
 						continue;  // next direction
 					}
