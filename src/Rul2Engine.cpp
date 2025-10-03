@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include "RuleEquivalence.h"
 #include <utility>
+#include "Logger.h"
 
 std::ostream& operator<<(std::ostream& os, const cSC4NetworkTool::tSolvedCell& t)
 {
@@ -43,6 +44,7 @@ struct MultiMapRange
 namespace
 {
 	constexpr int32_t maxRepetitions = 100;
+	constexpr int32_t maxCellsBufferSize = 256 * 3;  // e.g. enough for a diagonal double-tile network across the entire map
 
 	// OverrideRuleNode* const sTileConflictRules = *(reinterpret_cast<OverrideRuleNode**>(0xb466d0));
 	std::unordered_set<cSC4NetworkTileConflictRule, RuleEquivalenceHash, RuleEquivalence> sTileConflictRules2 = {};
@@ -257,6 +259,9 @@ namespace
 		int32_t countPatchesCurrentCell = 0;
 		while (true) {
 mainLoop:
+			// Well-foundedness: Either countPatchesCurrentCell is incremented, or it's reset to 0 but cell is incremented, or cell is reset to begin() but foundMatch was true, so countMatchesDown was decremented.
+			// Hence, the triple (-countMatchesDown, cell, countPatchesCurrentCell) is strictly increasing, with countMatchesDown and countPatchesCurrentCell being bounded by constants.
+			// The only termination problem can arise when cellsBuffer grows without bounds, for some reason, so we bound it by maxCellsBufferSize.
 			if (countPatchesCurrentCell <= maxRepetitions) {
 				for (uint32_t dir = 0; dir < 4; dir++) {
 					uint32_t z = cell->xz >> 16;
@@ -331,7 +336,13 @@ mainLoop:
 
 					if (isCell2StackLocal) {  // cell is not in buffer
 						uint32_t idx = cell - cellsBuffer.begin();
-						cell2Info->idxInCellsBuffer = cellsBuffer.size();
+						uint32_t idx2 = cellsBuffer.size();
+						if (idx2 >= maxCellsBufferSize) {  // safe-guard to ensure termination
+							Logger& logger = Logger::GetInstance();
+							logger.WriteLineFormatted(LogLevel::Info, "Unexpectedly many cells in RUL2 evaluation queue (size=%d, idx=%d), so terminating evaluation with a red-drag.", idx2, idx);
+							return false;  // Prevent (Returning true would also be an option. It would result in random unstable overrides.)
+						}
+						cell2Info->idxInCellsBuffer = idx2;
 						cellsBuffer.push_back(*cell2);
 						cell = cellsBuffer.begin() + idx;  // push_back might have triggered reallocation of the cells, so we retrieve the current address again
 					}
@@ -343,7 +354,7 @@ mainLoop:
 
 			cell = cell + 1;
 			countPatchesCurrentCell = 0;
-			if (cell != cellsBuffer.begin() + cellsBuffer.size()) {  // if not reached end
+			if (cell != cellsBuffer.end()) {  // if not reached end
 				continue;  // main loop
 			} else if (foundMatch) {  // reached end, but also foundMatch, so continue until all cells remain unchanged
 				cell = cellsBuffer.begin();
