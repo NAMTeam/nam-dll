@@ -82,6 +82,9 @@ namespace
 		}
 
 		SC4Point<uint32_t> dummyCell = {x + origin.x, z + origin.y};  // simulates a 1×1-cell drag when placing the puzzle piece (now with the origin offset, it points to a cell contained in the puzzle piece)
+		if (dummyCell.x >= networkTool->numCellsX || dummyCell.y >= networkTool->numCellsZ) {
+			dummyCell = {x, z};  // at city boundary, revert to original origin within city bounds to avoid sporadic crash (in the worst case, this results in a red PP cursor or an unnecessary 1×1 stub at origin)
+		}
 		networkTool->draggedCells.clear();
 		networkTool->draggedCells.push_back(dummyCell);
 	}
