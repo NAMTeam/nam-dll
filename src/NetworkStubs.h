@@ -5,6 +5,8 @@
 #include "SC4HashMap.h"
 #include "SC4Point.h"
 #include "RotFlip.h"
+#include "SC4Rect.h"
+#include "cISC4City.h"
 
 // The RESERVED macro provides names for reserved or unknown struct fields
 #define _CONCATNAM(x,y) x ## y
@@ -257,3 +259,22 @@ namespace nSC4Networks
 	static_assert(offsetof(cIntRule, staticCells) == 0x4c);
 	static_assert(sizeof(cIntRule) == 0xfc);
 }
+
+class cSC4PathFinder
+{
+	public:
+		uint8_t RESERVED[0xc];
+		cISC4TrafficSimulator* trafficSimulator;
+		uint8_t RESERVED[0x18 - 0x10];
+		SC4Rect<int32_t> rect1;  // starting point
+		SC4Rect<int32_t> rect2;  // nearest standard destination
+		uint8_t RESERVED[0x48 - 0x38];
+		SC4Rect<int32_t> rect3;  // blocked/originating city edge (for routes coming from neighboring city)
+		uint8_t RESERVED[0x80 - 0x58];
+		uint32_t tripDestinationFilter;  // 0/2/3
+		uint8_t destinationFlags;  // size unknown
+		uint8_t RESERVED[0xb8 - 0x85];
+		SC4Point<int32_t> cityCellCount;
+		// rest unknown, much missing
+};
+static_assert(offsetof(cSC4PathFinder, cityCellCount) == 0xb8);

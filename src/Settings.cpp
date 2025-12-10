@@ -3,14 +3,15 @@
 #include "mini/ini.h"
 
 Settings::Settings() :
-	enableKeyboardShortcuts(true),
 	enableDiagonalStreets(true),
 	disableAutoconnect(true),
 	enableTunnels(true),
 	reduceFerryBridgeHeightPatch(true),
 	enableRUL2EnginePatch(true),
 	enableNetworkSlopePatch(true),
-	enableFlexPuzzlePiecePatch(true) {};
+	enableFlexPuzzlePiecePatch(true),
+	enableCommuteLoopPatch(true),
+	enableKeyboardShortcuts(true) {};
 
 void Settings::Load(std::filesystem::path settingsFilePath)
 {
@@ -30,6 +31,7 @@ void Settings::Load(std::filesystem::path settingsFilePath)
 			readBoolProp("EnableRUL2EnginePatch", enableRUL2EnginePatch);
 			readBoolProp("EnableNetworkSlopePatch", enableNetworkSlopePatch);
 			readBoolProp("EnableFlexPuzzlePiecePatch", enableFlexPuzzlePiecePatch);
+			readBoolProp("EnableCommuteLoopPatch", enableCommuteLoopPatch);
 		} else {
 			logger.WriteLine(LogLevel::Info, "Using default settings, as no NAM.ini configuration file was detected.");
 		}

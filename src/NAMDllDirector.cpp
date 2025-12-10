@@ -49,6 +49,7 @@
 #include "Rul2Engine.h"
 #include "NetworkSlopes.h"
 #include "FlexPieces.h"
+#include "CommuteLoop.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -190,6 +191,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableRUL2EnginePatch, "RUL2 Engine patch", Rul2Engine::Install);
 		InstallWhen(settings.enableNetworkSlopePatch, "Network Slopes patch", NetworkSlopes::Install);
 		InstallWhen(settings.enableFlexPuzzlePiecePatch, "FLEX Puzzle Piece RUL0 patch", FlexPieces::Install);
+		InstallWhen(settings.enableCommuteLoopPatch, "Eternal Commute Loop patch", CommuteLoop::Install);
 	}
 }
 

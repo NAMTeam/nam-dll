@@ -7,7 +7,6 @@ public:
 	Settings();
 	void Load(std::filesystem::path settingsFilePath);
 
-	bool enableKeyboardShortcuts;
 	bool enableDiagonalStreets;
 	bool disableAutoconnect;
 	bool enableTunnels;
@@ -15,4 +14,6 @@ public:
 	bool enableRUL2EnginePatch;
 	bool enableNetworkSlopePatch;
 	bool enableFlexPuzzlePiecePatch;
+	bool enableCommuteLoopPatch;
+	bool enableKeyboardShortcuts;
 };
