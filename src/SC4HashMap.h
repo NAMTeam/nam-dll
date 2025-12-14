@@ -47,8 +47,8 @@ public:
 			}
 		}
 	public:
-		iterator(HashMapNode** pBucket, HashMapNode** pEnd, HashMapNode* pNode) : pEnd(pEnd), pBucket(pBucket), pNode(pNode) {}
-		iterator(HashMapNode** pBucket, HashMapNode** pEnd) : pEnd(pEnd), pBucket(pBucket) {
+		iterator(HashMapNode** pBucket, HashMapNode** pEnd, HashMapNode* pNode) : pBucket(pBucket), pEnd(pEnd), pNode(pNode) {}
+		iterator(HashMapNode** pBucket, HashMapNode** pEnd) : pBucket(pBucket), pEnd(pEnd) {
 			if (pBucket != pEnd) {
 				this->pNode = *pBucket;
 				advance_while_null();

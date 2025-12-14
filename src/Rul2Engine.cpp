@@ -51,7 +51,7 @@ namespace
 
 	enum Rul2PatchResult : uint32_t { NoMatch, Matched, Prevent };
 	typedef Rul2PatchResult (__thiscall* pfn_cSC4NetworkTool_PatchTilePair)(cSC4NetworkTool* pThis, MultiMapRange const& range, cSC4NetworkTool::tSolvedCell& cell1, cSC4NetworkTool::tSolvedCell& cell2, int8_t dir);
-	pfn_cSC4NetworkTool_PatchTilePair PatchTilePair = reinterpret_cast<pfn_cSC4NetworkTool_PatchTilePair>(0x6337e0);
+	// pfn_cSC4NetworkTool_PatchTilePair PatchTilePair = reinterpret_cast<pfn_cSC4NetworkTool_PatchTilePair>(0x6337e0);
 
 	void addRuleOverride(cSC4NetworkTileConflictRule* rule) {
 		if (rule->_2.id != 0) {  // we don't check _1.id != 0 as vanilla doesn't do that either, presumably
@@ -75,7 +75,7 @@ namespace
 		// dir = 1 (cell2 is north of cell1)
 		// dir = 2 (cell2 is east of cell1) (this is the case we usually think of when writing RUL2)
 		// dir = 3 (cell2 is south of cell1)
-		cSC4NetworkTileConflictRule dummy = {cell1.id, absoluteToRelative(cell1.rf, dir), cell2.id, absoluteToRelative(cell2.rf, dir)};  // tile 3 and 4 uninitialized
+		cSC4NetworkTileConflictRule dummy = {{cell1.id, absoluteToRelative(cell1.rf, dir)}, {cell2.id, absoluteToRelative(cell2.rf, dir)}};  // tile 3 and 4 uninitialized
 		const auto pRule = sTileConflictRules2.find(dummy);
 		if (pRule == sTileConflictRules2.end()) {
 			return NoMatch;
@@ -188,7 +188,7 @@ namespace
 				if (result != Matched ||
 					b.id != bBackup.id || b.rf != bBackup.rf ||  //  b must remain unchanged (in 2nd override) for a proper adjacency
 					b.id == c.id ||  // c must not be an orthogonal override network
-					c.id == cell2.id && c.rf == cell2.rf) {  // c must change (in 2nd override) for a proper adjacency
+					(c.id == cell2.id && c.rf == cell2.rf)) {  // c must change (in 2nd override) for a proper adjacency
 					continue;  // next surrogate tile
 				}
 
@@ -217,7 +217,7 @@ namespace
 				result = PatchTilePair2(b, c, (dir + (southBound ? 1 : -1)) & 3);
 				if (result != Matched ||
 					b.id != bBackup.id || b.rf != bBackup.rf ||  // b must remain unchanged (in 2nd override) for a proper adjacency
-					c.id == cell1.id && c.rf == cell1.rf) {  // otherwise we haven't gone anywhere
+					(c.id == cell1.id && c.rf == cell1.rf)) {  // otherwise we haven't gone anywhere
 					continue;
 				}
 				cSC4NetworkTool::tSolvedCell cBackup = c;
@@ -226,7 +226,7 @@ namespace
 				if (result != Matched ||
 					c.id != cBackup.id || c.rf != cBackup.rf ||  // c must remain unchanged (in 3rd override) for a proper adjacency
 					c.id == d.id || b.id == d.id ||  // d must not be a pure diagonal
-					d.id == cell2.id && d.rf == cell2.rf) {  // d must change (in 3rd override) for a proper adjacency
+					(d.id == cell2.id && d.rf == cell2.rf)) {  // d must change (in 3rd override) for a proper adjacency
 					continue;
 				}
 

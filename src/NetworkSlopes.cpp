@@ -21,6 +21,7 @@ template<> struct std::hash<IntersectionFlags>
 {
 	std::size_t operator()(const IntersectionFlags &s) const noexcept
 	{
+		// djb2 hash/Hull-Dobell
 		std::size_t h = 5381;
 		h = ((h << 5) + h) + std::hash<uint32_t>{}(s.networkTypeFlags);
 		h = ((h << 5) + h) + std::hash<uint32_t>{}(s.edgeFlags1);
@@ -137,15 +138,15 @@ namespace
 	}
 
 	const std::unordered_map<uint32_t, CurveSpec> curvePiecesPartial = {
-		{flagsFromOctal(00, 00, 01, 013), {Curve45Diag, R0F0}},
-		{flagsFromOctal(03, 00, 00, 011), {Curve45Diag, R0F1}},
-		{flagsFromOctal(00, 02, 00, 011), {Curve45Orth, R0F0}},
-		{flagsFromOctal(00, 02, 00, 013), {Curve45Orth, R0F1}},
-		{flagsFromOctal(00, 00, 02, 013), {Curve45Kink, R0F0}},
-		{flagsFromOctal(02, 00, 00, 011), {Curve45Kink, R0F1}},
-		{flagsFromOctal(00, 00, 011, 013), {Curve45DoubleKink, R0F0}},
-		{flagsFromOctal(013, 00, 00, 011), {Curve45DoubleKink, R0F1}},
-		{flagsFromOctal(00, 00, 01, 03), {Diagonal, R0F0}},
+		{flagsFromOctal(000, 000, 001, 013), {Curve45Diag, R0F0}},
+		{flagsFromOctal(003, 000, 000, 011), {Curve45Diag, R0F1}},
+		{flagsFromOctal(000, 002, 000, 011), {Curve45Orth, R0F0}},
+		{flagsFromOctal(000, 002, 000, 013), {Curve45Orth, R0F1}},
+		{flagsFromOctal(000, 000, 002, 013), {Curve45Kink, R0F0}},
+		{flagsFromOctal(002, 000, 000, 011), {Curve45Kink, R0F1}},
+		{flagsFromOctal(000, 000, 011, 013), {Curve45DoubleKink, R0F0}},
+		{flagsFromOctal(013, 000, 000, 011), {Curve45DoubleKink, R0F1}},
+		{flagsFromOctal(000, 000, 001, 003), {Diagonal, R0F0}},
 	};
 
 	std::unordered_map<uint32_t, CurveSpec> initCurvePiecesWithRotations() {
@@ -185,7 +186,7 @@ namespace
 	bool isFalsieFirst(uint32_t edgeFlags1, uint32_t edgeFlags2, bool diag) {
 		if (diag ? isPureDiag(edgeFlags1) : isPureOrth(edgeFlags1)) {
 			auto numConns2 = countConnections(edgeFlags2, 0xff);
-			if (numConns2 >= 3 || numConns2 == 2 && !isPureOrth(edgeFlags2) && !isPureDiag(edgeFlags2)) {
+			if (numConns2 >= 3 || (numConns2 == 2 && !isPureOrth(edgeFlags2) && !isPureDiag(edgeFlags2))) {
 				return true;
 			}
 		}
@@ -218,7 +219,7 @@ namespace
 
 		// check if cell is onslope or falsie
 		bool isFalsie = false;
-		const OnslopeSpec* onslopeSpec;
+		const OnslopeSpec* onslopeSpec = nullptr;
 		if (isMulti && !cellInfo.isNetworkLot) {
 			auto networkType2 = cSC4NetworkTool::GetFirstNetworkTypeFromFlags(cellInfo.networkTypeFlags & cellInfo.networkTypeFlags - 1);
 			auto edgeFlags1 = cellInfo.edgesPerNetwork[networkType];
@@ -247,7 +248,7 @@ namespace
 			}
 		}
 
-		const CurveSpec* curveSpec;
+		const CurveSpec* curveSpec = nullptr;
 		if (!isMulti && !cellInfo.isNetworkLot && (cellInfo.networkTypeFlags & (NW_MASK(LightRail) | NW_MASK(Monorail))) == 0) {
 			// For now, avoid sloped curves for Lightrail/Monorail, as otherwise support pillars could sometimes stick through the track
 			// as they are not perfectly perpendicular to the gradient of the S3D polygons. Consider revisiting this when there are Lightrail WRCs.
@@ -290,7 +291,7 @@ namespace
 			auto getAdjacentCell = [&networkTool, &cellInfo](CellSide dir) {
 				uint32_t x = kNextX[dir] + cellInfo.x;
 				uint32_t z = kNextZ[dir] + cellInfo.z;
-				cSC4NetworkCellInfo* result;
+				cSC4NetworkCellInfo* result = nullptr;
 				if (x < networkTool->numCellsX && z < networkTool->numCellsZ) {
 					result = networkTool->GetCellInfo(mkCellXZ(x, z));
 				}
@@ -355,11 +356,11 @@ namespace
 			}
 		}
 		else if (!isFalsie && (
-			(numBasicConnsCombined == 0 || numBasicConnsCombined > 2)
-			&& (isMulti || cellInfo.edgeFlagsCombined != 0x3010301 && cellInfo.edgeFlagsCombined != 0x1030103)  // intersections, regardless of number of networks
-			|| !cSC4NetworkTool::sNetworkTypeInfo[networkType].pylonSupportIDs.empty()
-			&& (cellInfo.edgeFlagsCombined & 0xf8f8f8f8) != 0 && numBasicConnsCombined == 2  // special higher-flag Lightrail/Monorail pieces
-			))
+			((numBasicConnsCombined == 0 || numBasicConnsCombined > 2)
+			 && (isMulti || (cellInfo.edgeFlagsCombined != 0x3010301 && cellInfo.edgeFlagsCombined != 0x1030103)))  // intersections, regardless of number of networks
+			|| (!cSC4NetworkTool::sNetworkTypeInfo[networkType].pylonSupportIDs.empty()
+				&& (cellInfo.edgeFlagsCombined & 0xf8f8f8f8) != 0 && numBasicConnsCombined == 2  // special higher-flag Lightrail/Monorail pieces
+			)))
 		{
 			// flattening of intersections
 			uint32_t networkLotOffset = cellInfo.isNetworkLot != false ? 100000 : 0;

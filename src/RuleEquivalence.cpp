@@ -37,7 +37,7 @@ namespace
 	// maps RotFlip to range 0..7 for use in lookup tables (swapping R1F1 and R3F1 to match metarules ordinals)
 	constexpr uint8_t rotFlipOrdinal(RotFlip rf)
 	{
-		return (rf & 3) ^ ((rf << 1) & (rf >> 6)) | (rf >> 5);  // rotation = bit 0 and 1, flip = shifted from bit 7 to 2
+		return ((rf & 3) ^ ((rf << 1) & (rf >> 6))) | (rf >> 5);  // rotation = bit 0 and 1, flip = shifted from bit 7 to 2
 	}
 	static_assert(rotFlipOrdinal(R0F0) == 0);
 	static_assert(rotFlipOrdinal(R1F0) == 1);
@@ -70,7 +70,7 @@ std::size_t RuleEquivalenceHash::operator()(const cSC4NetworkTileConflictRule& r
 	const uint32_t a = rule._1.id;
 	const uint32_t b = rule._2.id;
 	constexpr std::size_t prime = 66403;  // most ID information lies in bits 7-23 (17 bits), so prime should have at least 32-17 = 15 bits so as to shift much of the information around
-	if (swapped(rule) || isWeird(rfh) && b < a) {
+	if (swapped(rule) || (isWeird(rfh) && b < a)) {
 		return ((prime + std::hash<std::uint32_t>{}(b)) * prime + std::hash<std::uint32_t>{}(a)) * prime + rfh;
 	} else {
 		return ((prime + std::hash<std::uint32_t>{}(a)) * prime + std::hash<std::uint32_t>{}(b)) * prime + rfh;
@@ -83,7 +83,7 @@ bool RuleEquivalence::operator()(const cSC4NetworkTileConflictRule& p, const cSC
 	if (rfh != rfHash(q)) {
 		return false;
 	} else if (isWeird(rfh)) {  // the weird equiv classes have only 2 RotFlips (rather than 4) which is why this additional case necessary
-		return p._1.id == q._1.id && p._2.id == q._2.id || p._1.id == q._2.id && p._2.id == q._1.id;
+		return (p._1.id == q._1.id && p._2.id == q._2.id) || (p._1.id == q._2.id && p._2.id == q._1.id);
 	} else if (swapped(p) == swapped(q)) {
 		return p._1.id == q._1.id && p._2.id == q._2.id;
 	} else {
