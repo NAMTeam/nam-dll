@@ -63,8 +63,6 @@ static constexpr uint32_t kGroundHighwayKeyboardShortcut = 0x4BE098FD;
 static constexpr uint32_t kGZWin_WinSC4App = 0x6104489a;
 static constexpr uint32_t kGZWin_SC4View3DWin = 0x9a47b417;
 
-static constexpr uint32_t kGZIID_cISC4View3DWin = 0xFA47B3F9;
-
 static constexpr std::string_view PluginLogFileName = "NAM.log";
 static constexpr std::string_view SettingsFileName = "NAM.ini";
 
