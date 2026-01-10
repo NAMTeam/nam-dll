@@ -4,16 +4,12 @@ A DLL Plugin for SimCity 4 that improves interoperability with the Network Addon
 
 ## Features
 
-- draggable diagonal Streets
-- disabling autoconnect for the Street and RHW tools (Streets placed by the zoning tool still connect automatically)
-- Street tunnels
-- additional network tool shortcuts
+See [NAM.ini](src/NAM.ini) for the full list of features.
 
 ### Street Tunnels
 
 Enables functionality of Street tunnels.
-For this purpose, the DLL includes a modified tunnel and slope mod for the Street network.
-If you already use a slope mod, make sure the new file loads after.
+This feature requires installing a compatible tunnel and slope mod such as the [NAM Tunnel & Slope Mod](https://community.simtropolis.com/files/file/35420-network-addon-mod-tunnel-and-slope-mod/).
 
 ### Additional Network Tool Shortcuts
 
@@ -48,6 +44,8 @@ The plugin may work on Windows 7 or later with the [Microsoft Visual C++ 2022 x8
 2. Copy `NAM.dll` into the top-level directory of either Plugins folder.
 3. Copy the supplemental files into your Plugins folder.
 3. Start SimCity 4.
+
+To take full advantage of the DLL, instead install the NAM 50-beta using [sc4pac](https://memo33.github.io/sc4pac/channel/?pkg=nam:network-addon-mod), which includes network code optimized for the DLL.
 
 ## Troubleshooting
 
