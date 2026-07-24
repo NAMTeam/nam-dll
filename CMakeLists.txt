@@ -35,8 +35,19 @@ set(NAM_SOURCES
     src/Settings.cpp
     src/TransitAccess.cpp
     src/TunnelPortalTool.cpp
-    src/TunnelPortalStyle.cpp
-    src/TunnelPortalToolViewInputControl.cpp
+    src/tunnelportal/Debug.cpp
+    src/tunnelportal/GameAccess.cpp
+    src/tunnelportal/PathMapView.cpp
+    src/tunnelportal/PathStitcher.cpp
+    src/tunnelportal/PieceInserter.cpp
+    src/tunnelportal/PortalFootprint.cpp
+    src/tunnelportal/PortalGeometry.cpp
+    src/tunnelportal/PortalPlacer.cpp
+    src/tunnelportal/RouteEdgeFixes.cpp
+    src/tunnelportal/SavedTunnelScanner.cpp
+    src/tunnelportal/Style.cpp
+    src/tunnelportal/TrafficSimTunnels.cpp
+    src/tunnelportal/ViewInputControl.cpp
     src/version.rc
 )
 

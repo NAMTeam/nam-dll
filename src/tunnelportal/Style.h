@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace TunnelPortalStyles
+namespace TunnelPortal::Styles
 {
 	constexpr uint32_t kExemplarType = 0x6534284A;
 	constexpr uint32_t kExemplarGroup = 0x4A7B6E40;

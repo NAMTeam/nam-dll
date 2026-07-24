@@ -1,7 +1,7 @@
 #include "TunnelPortalTool.h"
 
-#include "TunnelPortalToolPlacement.h"
-#include "TunnelPortalStyle.h"
+#include "PortalPlacer.h"
+#include "Style.h"
 
 #include "Logger.h"
 #include "cGZMessage.h"
@@ -62,11 +62,11 @@ namespace
 		virtual cIGZBuffer* AsIGZBuffer() = 0;
 	};
 
-	using TunnelPortalToolPlacement::Endpoint;
-	using TunnelPortalToolPlacement::ExpectedPortalTileCount;
-	using TunnelPortalToolPlacement::NetworkTypeName;
-	using TunnelPortalToolPlacement::PlacePortalPair;
-	using TunnelPortalToolPlacement::TryFindNetworkAtTile;
+	using TunnelPortal::PortalPlacer::Endpoint;
+	using TunnelPortal::PortalPlacer::ExpectedPortalTileCount;
+	using TunnelPortal::PortalPlacer::NetworkTypeName;
+	using TunnelPortal::PortalPlacer::PlacePortalPair;
+	using TunnelPortal::PortalPlacer::TryFindNetworkAtTile;
 
 	cISC4City* GetCity()
 	{
@@ -262,7 +262,7 @@ namespace
 	private:
 		bool ShowStyleSelector()
 		{
-			styles = TunnelPortalStyles::LoadCompatibleStyles(
+			styles = TunnelPortal::Styles::LoadCompatibleStyles(
 				firstEndpoint.networkType,
 				ExpectedPortalTileCount(firstEndpoint.networkType));
 			if (styles.empty())
@@ -401,7 +401,7 @@ namespace
 
 		void TrySetStyleIcon(
 			cIGZWinBtn* button,
-			const TunnelPortalStyles::Style& style)
+			const TunnelPortal::Styles::Style& style)
 		{
 			if (!button || style.iconGroup == 0 || style.iconInstance == 0)
 			{
@@ -496,7 +496,7 @@ namespace
 				{
 					return;
 				}
-				const TunnelPortalStyles::Style selectedStyle =
+				const TunnelPortal::Styles::Style selectedStyle =
 					styles[selectedStyleIndex];
 				CloseStyleSelector();
 
@@ -642,7 +642,7 @@ namespace
 		Endpoint secondEndpoint;
 		bool hasFirstEndpoint = false;
 		uint32_t selectedStyleIndex = 0;
-		std::vector<TunnelPortalStyles::Style> styles;
+		std::vector<TunnelPortal::Styles::Style> styles;
 		cRZAutoRefCount<cIGZWin> styleSelectorWindow;
 		std::vector<cRZAutoRefCount<cIGZBuffer>> iconBuffers;
 	};

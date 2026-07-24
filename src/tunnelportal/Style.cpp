@@ -1,4 +1,4 @@
-#include "TunnelPortalStyle.h"
+#include "Style.h"
 
 #include "Logger.h"
 #include "cGZPersistResourceKey.h"
@@ -21,7 +21,7 @@ namespace
 	bool ReadStyle(
 		cIGZPersistResourceManager* resourceManager,
 		const cGZPersistResourceKey& key,
-		TunnelPortalStyles::Style& style)
+		TunnelPortal::Styles::Style& style)
 	{
 		cRZAutoRefCount<cISCResExemplar> exemplar;
 		if (!resourceManager->GetResource(
@@ -42,23 +42,23 @@ namespace
 		cRZBaseString name;
 		if (!properties
 			|| !properties->GetProperty(
-				TunnelPortalStyles::kPropertySchemaVersion,
+				TunnelPortal::Styles::kPropertySchemaVersion,
 				schemaVersion)
-			|| schemaVersion != TunnelPortalStyles::kSchemaVersion
+			|| schemaVersion != TunnelPortal::Styles::kSchemaVersion
 			|| !properties->GetProperty(
-				TunnelPortalStyles::kPropertyNetworkType,
+				TunnelPortal::Styles::kPropertyNetworkType,
 				networkType)
 			|| networkType > kMaximumNetworkType
 			|| !properties->GetProperty(
-				TunnelPortalStyles::kPropertyTileCount,
+				TunnelPortal::Styles::kPropertyTileCount,
 				tileCount)
 			|| (tileCount != 1 && tileCount != 2)
 			|| !properties->GetProperty(
-				TunnelPortalStyles::kPropertyPortalExemplar0,
+				TunnelPortal::Styles::kPropertyPortalExemplar0,
 				style.portalExemplarIds[0])
 			|| style.portalExemplarIds[0] == 0
 			|| !properties->GetProperty(
-				TunnelPortalStyles::kPropertyExemplarName,
+				TunnelPortal::Styles::kPropertyExemplarName,
 				name)
 			|| name.Strlen() == 0)
 		{
@@ -67,7 +67,7 @@ namespace
 
 		if (tileCount == 2
 			&& (!properties->GetProperty(
-				TunnelPortalStyles::kPropertyPortalExemplar1,
+				TunnelPortal::Styles::kPropertyPortalExemplar1,
 				style.portalExemplarIds[1])
 				|| style.portalExemplarIds[1] == 0))
 		{
@@ -75,10 +75,10 @@ namespace
 		}
 
 		properties->GetProperty(
-			TunnelPortalStyles::kPropertyIconGroup,
+			TunnelPortal::Styles::kPropertyIconGroup,
 			style.iconGroup);
 		properties->GetProperty(
-			TunnelPortalStyles::kPropertyIconInstance,
+			TunnelPortal::Styles::kPropertyIconInstance,
 			style.iconInstance);
 
 		style.name = name.Data();
@@ -89,7 +89,7 @@ namespace
 	}
 }
 
-std::vector<TunnelPortalStyles::Style> TunnelPortalStyles::LoadCompatibleStyles(
+std::vector<TunnelPortal::Styles::Style> TunnelPortal::Styles::LoadCompatibleStyles(
 	cISC4NetworkOccupant::eNetworkType networkType,
 	uint8_t tileCount)
 {
