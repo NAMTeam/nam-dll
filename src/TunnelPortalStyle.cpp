@@ -81,7 +81,6 @@ namespace
 			TunnelPortalStyles::kPropertyIconInstance,
 			style.iconInstance);
 
-		style.id = key.instance;
 		style.name = name.Data();
 		style.networkType =
 			static_cast<cISC4NetworkOccupant::eNetworkType>(networkType);
@@ -156,10 +155,12 @@ std::vector<TunnelPortalStyles::Style> TunnelPortalStyles::LoadCompatibleStyles(
 			return left.name < right.name;
 		});
 
+	// styles[0] is the always-present native "Default"; report only the custom
+	// styles discovered from packages.
 	logger.WriteLineFormatted(
 		LogLevel::Info,
 		"TunnelPortalTool: found %u compatible facade style(s) for network %u (%u tile portal).",
-		static_cast<uint32_t>(styles.size()),
+		static_cast<uint32_t>(styles.size() - 1),
 		static_cast<uint32_t>(networkType),
 		static_cast<uint32_t>(tileCount));
 	return styles;

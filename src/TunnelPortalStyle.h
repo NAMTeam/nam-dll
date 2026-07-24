@@ -26,7 +26,6 @@ namespace TunnelPortalStyles
 
 	struct Style
 	{
-		uint32_t id = 0;
 		std::string name;
 		cISC4NetworkOccupant::eNetworkType networkType = cISC4NetworkOccupant::Road;
 		uint8_t tileCount = 1;

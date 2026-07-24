@@ -372,7 +372,7 @@ namespace
 		}
 	}
 
-	bool UseAscendingTwoTileSequence(uint8_t tunnelPieceDirection)
+	bool UseAscendingTwoTileSequence(const uint8_t tunnelPieceDirection)
 	{
 		// Preserve the native two-tile sequence transform. East- and
 		// south-facing portals assign sequence 0 to the lower cross-axis
@@ -564,8 +564,21 @@ namespace
 		{
 			return InsertTunnelPiece(tool, direction, sequenceIndex, cellInfo);
 		}
-		if (sequenceIndex >= style.tileCount
-			|| style.portalExemplarIds[sequenceIndex] == 0)
+		if (sequenceIndex >= style.tileCount)
+		{
+			return nullptr;
+		}
+
+		// The paired facade models use a fixed north/south half order, while
+		// the native sequence slots also select direction-dependent path,
+		// rotation, and height arrays. A quarter-turn onto the east/west axis
+		// reverses only the facade model halves; keep sequenceIndex for every
+		// native array.
+		const uint8_t styleExemplarIndex =
+			style.tileCount == 2 && (direction & 1) != 0
+				? static_cast<uint8_t>(sequenceIndex ^ 1)
+				: sequenceIndex;
+		if (style.portalExemplarIds[styleExemplarIndex] == 0)
 		{
 			return nullptr;
 		}
@@ -582,15 +595,6 @@ namespace
 			return nullptr;
 		}
 
-		// The paired facade models use a fixed north/south half order, while
-		// the native sequence slots also select direction-dependent path,
-		// rotation, and height arrays. A quarter-turn onto the east/west axis
-		// reverses only the facade model halves; keep sequenceIndex for every
-		// native array.
-		const uint8_t styleExemplarIndex =
-			style.tileCount == 2 && (direction & 1) != 0
-				? static_cast<uint8_t>(sequenceIndex ^ 1)
-				: sequenceIndex;
 		const uint32_t nativeExemplarId = exemplarIds[sequenceIndex];
 		exemplarIds[sequenceIndex] = style.portalExemplarIds[styleExemplarIndex];
 		cISC4NetworkOccupant* const occupant =
@@ -779,19 +783,6 @@ namespace
 		}
 
 		return nullptr;
-	}
-
-	uint16_t FindTunnelRecordMask(
-		cISC4TrafficSimulator* trafficSimulator,
-		const Endpoint& endpoint)
-	{
-		const RawTunnelMapNode* const node = FindTunnelRecord(trafficSimulator, endpoint);
-		if (node)
-		{
-			return static_cast<uint16_t>(node->value[0] >> 16);
-		}
-
-		return 0x01FE;
 	}
 
 	void FillTemporaryTunnelListNode(
