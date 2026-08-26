@@ -21,6 +21,10 @@ namespace TunnelPortal::PathStitcher
 	// the direction MakeTunnelPaths derives from cell coordinates.
 	// peerPathKeyLowWord (0xFFFF = none, or kAutomaticPeerPathLookup) rewrites
 	// the key looked up on the peer's path map.
+	// peerMouthPathDirection (0xFF = unknown) is the peer portal's facing in
+	// path-direction numbering. Automatic lookup prefers peer paths that enter
+	// from that side, so the stitch lands at the peer's tunnel mouth rather
+	// than at its surface edge.
 	//
 	// Returns false when the refresh could not run (null occupant or missing
 	// path info), meaning `self` has no usable tunnel path map. Callers must
@@ -29,7 +33,8 @@ namespace TunnelPortal::PathStitcher
 		cIGZUnknown* self,
 		cIGZUnknown* otherEnd,
 		uint8_t selfLookupPathDirection = 0xFF,
-		uint16_t peerPathKeyLowWord = 0xFFFF);
+		uint16_t peerPathKeyLowWord = 0xFFFF,
+		uint8_t peerMouthPathDirection = 0xFF);
 
 	// Installs the two MakeTunnelPaths inline hooks.
 	void InstallHooks();

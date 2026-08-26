@@ -11,6 +11,7 @@
 #include "PortalFootprint.h"
 #include "PortalGeometry.h"
 #include "RouteEdgeFixes.h"
+#include "TerrainPinning.h"
 #include "TrafficSimTunnels.h"
 #include "cISC4City.h"
 #include "cISC4NetworkManager.h"
@@ -31,6 +32,7 @@ namespace TunnelPortal::PortalPlacer
 		namespace Geometry = TunnelPortal::Geometry;
 		namespace PathMapView = TunnelPortal::PathMapView;
 		namespace PathStitcher = TunnelPortal::PathStitcher;
+		namespace TerrainPinning = TunnelPortal::TerrainPinning;
 		namespace Debug = TunnelPortal::Debug;
 
 		// Chooses how to pair the two lanes of a two-tile portal. Prefers path
@@ -304,20 +306,22 @@ namespace TunnelPortal::PortalPlacer
 				{
 					const uint16_t firstPeerLookup = requiresTwoTilePathKeyResolution
 						? PathStitcher::kAutomaticPeerPathLookup
-						: Geometry::TunnelPathKeyLowWord(secondPathDirection);
+						: Geometry::PortalExitPathKeyLowWord(secondPathDirection);
 					const uint16_t secondPeerLookup = requiresTwoTilePathKeyResolution
 						? PathStitcher::kAutomaticPeerPathLookup
-						: Geometry::TunnelPathKeyLowWord(firstPathDirection);
+						: Geometry::PortalExitPathKeyLowWord(firstPathDirection);
 					laneStitched = PathStitcher::RefreshTunnelPathInfo(
 						firstPortalCell.tunnel,
 						secondPortalCell.tunnel,
 						firstPathDirection,
-						firstPeerLookup);
+						firstPeerLookup,
+						secondPathDirection);
 					laneStitched = PathStitcher::RefreshTunnelPathInfo(
 						secondPortalCell.tunnel,
 						firstPortalCell.tunnel,
 						secondPathDirection,
-						secondPeerLookup) && laneStitched;
+						secondPeerLookup,
+						firstPathDirection) && laneStitched;
 				}
 				else
 				{
@@ -355,6 +359,10 @@ namespace TunnelPortal::PortalPlacer
 					firstPortalCell.tunnel,
 					secondPortalCell.tunnel);
 			}
+
+			// Both ends are registered with the traffic simulator by now, so this
+			// picks up the pair just placed along with everything already there.
+			TerrainPinning::MarkCommittedPortalsImmovable();
 
 			logger.WriteLineFormatted(
 				LogLevel::Info,

@@ -68,10 +68,10 @@ namespace TunnelPortal::Geometry
 		return kPathDirection[tunnelPieceDirection & 3];
 	}
 
-	uint16_t TunnelPathKeyLowWord(uint8_t pathDirection)
+	uint16_t PortalExitPathKeyLowWord(uint8_t pathDirection)
 	{
 		const uint8_t direction = pathDirection & 3;
-		return static_cast<uint16_t>(((direction ^ 2) << 8) | direction);
+		return static_cast<uint16_t>((direction << 8) | (direction ^ 2));
 	}
 
 	uint32_t SurfaceApproachEdge(uint8_t tunnelPieceDirection)

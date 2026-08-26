@@ -10,6 +10,7 @@
 //                   0x0053FE31  MakeTunnelPaths  peer path key lookup
 //   RouteEdgeFixes  0x006D9ACF  FindPath         tunnel AddTripNode call
 //                   0x00718215  FloodSubnetwork  tunnel GetNetworkInfo call
+//   TerrainPinning  0x0063BB6B  PlaceNetwork     CanTilesBeSupportedOnTerrain call
 
 #include "TunnelPortalTool.h"
 
@@ -17,6 +18,7 @@
 #include "tunnelportal/PathStitcher.h"
 #include "tunnelportal/RouteEdgeFixes.h"
 #include "tunnelportal/SavedTunnelScanner.h"
+#include "tunnelportal/TerrainPinning.h"
 
 #include "cISC4TrafficSimulator.h"
 
@@ -26,6 +28,7 @@ namespace
 	namespace RouteEdgeFixes = TunnelPortal::RouteEdgeFixes;
 	namespace PathStitcher = TunnelPortal::PathStitcher;
 	namespace SavedTunnelScanner = TunnelPortal::SavedTunnelScanner;
+	namespace TerrainPinning = TunnelPortal::TerrainPinning;
 }
 
 void TunnelPortalTool::Install()
@@ -33,6 +36,7 @@ void TunnelPortalTool::Install()
 	PathStitcher::InstallHooks();
 	SavedTunnelScanner::InstallRescanCallback();
 	RouteEdgeFixes::InstallHooks();
+	TerrainPinning::InstallHooks();
 }
 
 void TunnelPortalTool::RefreshCity()
@@ -45,4 +49,7 @@ void TunnelPortalTool::RefreshCity()
 	{
 		RouteEdgeFixes::MarkScanned();
 	}
+
+	// Upgrades portals saved before the immovable flag was set at placement.
+	TerrainPinning::MarkCommittedPortalsImmovable();
 }

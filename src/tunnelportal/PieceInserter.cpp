@@ -159,6 +159,10 @@ namespace TunnelPortal::PieceInserter
 			return;
 		}
 
+		// Mirrors cSC4NetworkConstructionCrew::MarkOccupantUsable. The immovable
+		// flag committed portals also need is applied separately, once the pair
+		// is registered with the traffic simulator; see
+		// TerrainPinning::MarkCommittedPortalsImmovable.
 		occupant->ClearNetworkFlag(0x4000);
 		baseOccupant->SetVisibility(true, true);
 		occupant->SetNetworkFlag(0x10000000);

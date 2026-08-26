@@ -46,9 +46,15 @@ namespace TunnelPortal::Geometry
 	// Piece rotation to path direction.
 	uint8_t TunnelPieceDirectionToPathDirection(uint8_t tunnelPieceDirection);
 
-	// Low word of a tunnel path key for a path direction: low byte is the exit
-	// direction, next byte its opposite.
-	uint16_t TunnelPathKeyLowWord(uint8_t pathDirection);
+	// Low word of the tunnel path key that *leaves* a portal whose mouth points
+	// this way: entry byte is the mouth side, exit byte the surface side.
+	//
+	// This is the key a peer portal must be asked for. MakeTunnelPaths appends
+	// the peer path's *first* point to the local path, and for this key that
+	// point sits at the peer's tunnel mouth - the deepest point inside the
+	// portal tile. Asking for the peer's entering path instead would append its
+	// surface-side edge and skip the peer portal tile entirely.
+	uint16_t PortalExitPathKeyLowWord(uint8_t pathDirection);
 
 	// Edge-flag bit a surface tile must expose to feed a portal with this
 	// piece rotation (i.e. the edge on the side the portal mouth opens toward).

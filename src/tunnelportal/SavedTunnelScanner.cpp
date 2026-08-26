@@ -130,22 +130,28 @@ namespace TunnelPortal::SavedTunnelScanner
 				}
 				if (refreshPathInfo)
 				{
+					const uint8_t firstPathDirection =
+						Geometry::TunnelPieceDirectionToPathDirection(firstDirection);
+					const uint8_t secondPathDirection =
+						Geometry::TunnelPieceDirectionToPathDirection(secondDirection);
 					const uint16_t firstPeerLookup = requiresAvenuePathKeyResolution
 						? PathStitcher::kAutomaticPeerPathLookup
-						: Geometry::TunnelPathKeyLowWord(Geometry::TunnelPieceDirectionToPathDirection(secondDirection));
+						: Geometry::PortalExitPathKeyLowWord(secondPathDirection);
 					const uint16_t secondPeerLookup = requiresAvenuePathKeyResolution
 						? PathStitcher::kAutomaticPeerPathLookup
-						: Geometry::TunnelPathKeyLowWord(Geometry::TunnelPieceDirectionToPathDirection(firstDirection));
+						: Geometry::PortalExitPathKeyLowWord(firstPathDirection);
 					PathStitcher::RefreshTunnelPathInfo(
 						firstTunnel,
 						secondTunnel,
-						Geometry::TunnelPieceDirectionToPathDirection(firstDirection),
-						firstPeerLookup);
+						firstPathDirection,
+						firstPeerLookup,
+						secondPathDirection);
 					PathStitcher::RefreshTunnelPathInfo(
 						secondTunnel,
 						firstTunnel,
-						Geometry::TunnelPieceDirectionToPathDirection(secondDirection),
-						secondPeerLookup);
+						secondPathDirection,
+						secondPeerLookup,
+						firstPathDirection);
 				}
 			}
 		}

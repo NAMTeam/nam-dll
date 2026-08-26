@@ -7,3 +7,6 @@
 [submodule "vendor/mINI"]
 	path = vendor/mINI
 	url = https://github.com/metayeti/mINI.git
+[submodule "vendor/sc4-properties"]
+	path = vendor/sc4-properties
+	url = https://github.com/NAMTeam/New_Properties.xml.git

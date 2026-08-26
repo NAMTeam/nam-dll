@@ -46,6 +46,7 @@ set(NAM_SOURCES
     src/tunnelportal/RouteEdgeFixes.cpp
     src/tunnelportal/SavedTunnelScanner.cpp
     src/tunnelportal/Style.cpp
+    src/tunnelportal/TerrainPinning.cpp
     src/tunnelportal/TrafficSimTunnels.cpp
     src/tunnelportal/ViewInputControl.cpp
     src/version.rc

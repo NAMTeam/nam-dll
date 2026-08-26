@@ -5,6 +5,7 @@
 #include "Logger.h"
 #include "PathMapView.h"
 #include "Patching.h"
+#include "PortalGeometry.h"
 #include "RawLayouts.h"
 #include "cIGZUnknown.h"
 
@@ -17,6 +18,7 @@ namespace TunnelPortal::PathStitcher
 	{
 		namespace Game = TunnelPortal::Game;
 		namespace Site = TunnelPortal::Game::Site;
+		namespace Geometry = TunnelPortal::Geometry;
 		namespace PathMapView = TunnelPortal::PathMapView;
 		namespace Debug = TunnelPortal::Debug;
 
@@ -28,6 +30,10 @@ namespace TunnelPortal::PathStitcher
 		// (kNextX/kNextZ numbering: 0=west, 1=north, 2=east, 3=south).
 		uint8_t sCustomPortalFacingOverride = 0xFF;
 		uint16_t sCustomPeerPathLookupKeyLowWord = 0xFFFF;
+		// Peer portal facing, path-direction numbering, 0xFF when unknown. Used
+		// by automatic lookup to prefer a peer path that starts at the peer's
+		// tunnel mouth.
+		uint8_t sCustomPeerMouthPathDirection = 0xFF;
 		void* sCustomSelfPathInfo = nullptr;
 		void* sCustomPeerPathInfo = nullptr;
 
@@ -48,6 +54,13 @@ namespace TunnelPortal::PathStitcher
 		// Avenue halves can number otherwise-compatible paths differently. Keep
 		// the key/path type byte and requested peer directions, but resolve the
 		// peer's actual uniqueness byte when the direct rewritten key is absent.
+		//
+		// MakeTunnelPaths appends the *first* point of whichever peer path this
+		// returns, so the choice decides where automata surface. A peer path
+		// entering from the peer's mouth side starts at the mouth, the deepest
+		// point inside the portal tile; any other peer path starts at a surface
+		// edge and makes traffic skip the peer portal. Rank mouth-side entry
+		// above the uniqueness index, and use geometry only to break ties.
 		uint32_t __stdcall ResolvePeerPathLookupKey(uint32_t originalKey)
 		{
 			if (sCustomPeerPathLookupKeyLowWord == 0xFFFF)
@@ -57,9 +70,19 @@ namespace TunnelPortal::PathStitcher
 
 			const bool automaticPeerLookup =
 				sCustomPeerPathLookupKeyLowWord == kAutomaticPeerPathLookup;
-			const uint32_t rewrittenKey = automaticPeerLookup
-				? originalKey
-				: (originalKey & 0xFFFF0000u) | sCustomPeerPathLookupKeyLowWord;
+			// Automatic lookup preserves the original key's type and uniqueness
+			// bytes. Its low word only defaults to the original when the peer
+			// facing is unknown: for opposite-facing portals the two are the
+			// same key anyway, while for same-facing portals reusing the
+			// original would land on the peer's *entering* path and stitch to
+			// its surface edge.
+			const uint16_t peerLookupLowWord = !automaticPeerLookup
+				? sCustomPeerPathLookupKeyLowWord
+				: (sCustomPeerMouthPathDirection != 0xFF
+					? Geometry::PortalExitPathKeyLowWord(sCustomPeerMouthPathDirection)
+					: static_cast<uint16_t>(originalKey));
+			const uint32_t rewrittenKey =
+				(originalKey & 0xFFFF0000u) | peerLookupLowWord;
 			const Raw::PathMap* const peerMap = PathMapView::GetPathMap(sCustomPeerPathInfo);
 			const Raw::PathMapNode* const exactNode = PathMapView::FindKey(peerMap, rewrittenKey);
 			if (PathMapView::HasPoints(exactNode))
@@ -82,9 +105,8 @@ namespace TunnelPortal::PathStitcher
 				PathMapView::FindKey(PathMapView::GetPathMap(sCustomSelfPathInfo), originalKey);
 			const Raw::PathPoint* const sourceLastPoint = PathMapView::LastPoint(sourceNode);
 			const uint32_t originalUniqueIndex = originalKey & 0x00FF0000u;
-			const Raw::PathMapNode* bestSameUniqueNode = nullptr;
-			float bestSameUniqueDistanceSquared = 3.4e38f;
 			const Raw::PathMapNode* bestNode = nullptr;
+			uint32_t bestScore = 0;
 			float bestDistanceSquared = 3.4e38f;
 			uint32_t visitedNodes = 0;
 			for (Raw::PathMapNode** bucket = peerMap->start;
@@ -109,28 +131,32 @@ namespace TunnelPortal::PathStitcher
 							const float dz = peerFirstPoint->z - sourceLastPoint->z;
 							distanceSquared = dx * dx + dz * dz;
 						}
-						if (!bestNode || distanceSquared < bestDistanceSquared)
+
+						const uint8_t entryDirection = static_cast<uint8_t>(node->key >> 8);
+						const bool startsAtPeerMouth =
+							sCustomPeerMouthPathDirection != 0xFF
+								&& entryDirection == sCustomPeerMouthPathDirection;
+						const bool keepsUniqueIndex =
+							(node->key & 0x00FF0000u) == originalUniqueIndex;
+						const uint32_t score =
+							(startsAtPeerMouth ? 2u : 0u) + (keepsUniqueIndex ? 1u : 0u);
+
+						if (!bestNode
+							|| score > bestScore
+							|| (score == bestScore && distanceSquared < bestDistanceSquared))
 						{
 							bestNode = node;
+							bestScore = score;
 							bestDistanceSquared = distanceSquared;
-						}
-						if ((node->key & 0x00FF0000u) == originalUniqueIndex
-							&& (!bestSameUniqueNode
-								|| distanceSquared < bestSameUniqueDistanceSquared))
-						{
-							bestSameUniqueNode = node;
-							bestSameUniqueDistanceSquared = distanceSquared;
 						}
 					}
 				}
 			}
 
-			const Raw::PathMapNode* const selectedNode =
-				bestSameUniqueNode ? bestSameUniqueNode : bestNode;
-			if (selectedNode)
+			if (bestNode)
 			{
 				++sPeerPathRemappedUniqueKeyCount;
-				return selectedNode->key;
+				return bestNode->key;
 			}
 
 			if (sPeerPathUnresolvedKeyCount < sPeerPathUnresolvedOriginalKeys.size())
@@ -214,7 +240,8 @@ namespace TunnelPortal::PathStitcher
 		cIGZUnknown* self,
 		cIGZUnknown* otherEnd,
 		uint8_t selfLookupPathDirection,
-		uint16_t peerPathKeyLowWord)
+		uint16_t peerPathKeyLowWord,
+		uint8_t peerMouthPathDirection)
 	{
 		Logger& logger = Logger::GetInstance();
 
@@ -240,6 +267,7 @@ namespace TunnelPortal::PathStitcher
 
 		sCustomPortalFacingOverride = selfLookupPathDirection;
 		sCustomPeerPathLookupKeyLowWord = peerPathKeyLowWord;
+		sCustomPeerMouthPathDirection = peerMouthPathDirection;
 		sCustomSelfPathInfo = pathInfo;
 		sCustomPeerPathInfo = Game::GetTunnelPathInfo(otherEnd);
 		sPeerPathExactKeyCount = 0;
@@ -259,6 +287,7 @@ namespace TunnelPortal::PathStitcher
 		}
 		sCustomPortalFacingOverride = 0xFF;
 		sCustomPeerPathLookupKeyLowWord = 0xFFFF;
+		sCustomPeerMouthPathDirection = 0xFF;
 		sCustomSelfPathInfo = nullptr;
 		sCustomPeerPathInfo = nullptr;
 		return true;

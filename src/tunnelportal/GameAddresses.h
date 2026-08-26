@@ -5,6 +5,7 @@
 #include "cISC4NetworkOccupant.h"
 #include "cISC4TrafficSimulator.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -96,6 +97,29 @@ namespace TunnelPortal::Game
 	inline const pfn_AddTripNode AddTripNode =
 		reinterpret_cast<pfn_AddTripNode>(0x006d8fa0);
 
+	// --- Global game data ----------------------------------------------------
+
+	// sNetworkTypeInfo: one cSC4NetworkTypeInfo per eNetworkType, loaded from
+	// each network's PlacementParams exemplar (type 0x6534284A, group
+	// 0x083444E0). Confirmed from PlaceNetwork's "imul eax,eax,0x114 /
+	// add eax,0xb452c8" prologue.
+	inline constexpr uint32_t kNetworkTypeInfoBase = 0x00b452c8;
+	inline constexpr size_t kNetworkTypeInfoStride = 0x114;
+
+	namespace NetworkTypeInfo
+	{
+		// MaxTerrainHtIncrease, property 0xC7B36CA4.
+		constexpr size_t kMaxTerrainHeightIncrease = 0x5c;  // float
+		// MaxTerrainHtDecrease, property 0xC7B36CA5.
+		constexpr size_t kMaxTerrainHeightDecrease = 0x60;  // float
+	}
+
+	inline void* NetworkTypeInfoFor(uint32_t networkType)
+	{
+		return reinterpret_cast<void*>(
+			kNetworkTypeInfoBase + networkType * kNetworkTypeInfoStride);
+	}
+
 	// --- Virtual calls -------------------------------------------------------
 
 	// cSC4NetworkTunnelOccupant::GetPathInfo, vtable slot 0x31 (byte offset 0xC4).
@@ -113,6 +137,16 @@ namespace TunnelPortal::Game
 		using pfn = void (__thiscall*)(void*, cIGZUnknown*, cIGZUnknown*);
 		void** const vtable = *reinterpret_cast<void***>(pathInfo);
 		reinterpret_cast<pfn>(vtable[0x20])(pathInfo, self, otherEnd);
+	}
+
+	// cSC4NetworkTool::CanTilesBeSupportedOnTerrain, vtable slot 0x38
+	// (byte offset 0xE0). Windows base implementation is at 0x00644b20, but
+	// cSC4UndergroundNetworkTool overrides it, so always dispatch virtually.
+	inline bool CanTilesBeSupportedOnTerrain(cSC4NetworkTool* tool, uint32_t networkType)
+	{
+		using pfn = bool (__thiscall*)(cSC4NetworkTool*, uint32_t);
+		void** const vtable = *reinterpret_cast<void***>(tool);
+		return reinterpret_cast<pfn>(vtable[0x38])(tool, networkType);
 	}
 
 	// cSC4TrafficNetworkMap::GetNetworkInfo, vtable slot 8.
@@ -142,13 +176,39 @@ namespace TunnelPortal::Game
 	{
 		// cSC4NetworkTool
 		constexpr size_t kToolPlacingMode = 0x50;         // uint8_t
+		// Failure code from the last PlaceNetwork attempt. Resolved to a message
+		// through LTEXT group 0x2A592FD1, instance = the code:
+		//   0xF0000001 Cannot place network on this terrain type
+		//   0xF0000002 Cannot place on top of reserved tiles
+		//   0xF0000003 (bridge drag guidance)
+		//   0xF0000004 (tunnel drag guidance)
+		//   0xF0000005 Cannot build highway intersection
+		//   0xF0000006 Unsuitable grade for construction   (SmoothenNetwork failed)
+		//   0xF0000007 Unsuitable area to build network.   (SolveNetwork failed)
+		//   0xF0000008 Failed Smoothing Terrain (CanTilesBeSupportedOnTerrain failed)
 		constexpr size_t kToolFailureCode = 0x20c;        // uint32_t
 		constexpr size_t kToolTunnelExemplarIds = 0x2E4;  // uint32_t*, indexed by sequence
 
 		// cSC4NetworkCellInfo. 0x53 is isImmovable in NetworkStubs.h; both bytes
 		// are what native InsertTunnelPieces sets before inserting a piece.
+		//
+		// 0x51 is only a hint: InsertRangeConstraintsForCell turns it into an
+		// InsertPreferredValueConstraint, which the satisfier may overrule. The
+		// hard pin is isImmovable, which switches the same function over to
+		// InsertFixedVertex for all four vertices.
 		constexpr size_t kCellTunnelMarker = 0x51;        // uint8_t
 		constexpr size_t kCellImmovable = 0x53;           // uint8_t
+
+		// Four corner heights, in the order of cSC4NetworkCellInfo::vertices.
+		// The values InsertFixedVertex pins each vertex to when a cell is
+		// immovable; seeded from cISC4NetworkOccupant::GetVertexHeights.
+		constexpr size_t kCellCornerHeights = 0x58;       // float[4]
+
+		// cSC4NetworkTool drag geometry. kToolDraggedCells is the begin pointer
+		// of a std::vector<SC4Point<uint32_t>> holding every cell of the current
+		// drag; kToolDraggedCellsEnd is its end pointer.
+		constexpr size_t kToolDraggedCells = 0x60;        // SC4Point<uint32_t>*
+		constexpr size_t kToolDraggedCellsEnd = 0x64;     // SC4Point<uint32_t>*
 
 		// cSC4TrafficSimulator
 		constexpr size_t kTrafficSimTunnelMap = 0xc8;     // Raw::TunnelMap
@@ -183,5 +243,17 @@ namespace TunnelPortal::Game
 		// branch: the call to GetNetworkInfo. Redirected for the same reason.
 		constexpr uint32_t kFloodSubnetworkGetNetworkInfoCall = 0x00718215;
 		constexpr uint32_t kFloodSubnetworkGetNetworkInfoCallRel = 0xFFFF7916;
+
+		// Inside cSC4NetworkTool::PlaceNetwork (0x0063b830): the 6-byte
+		// "call [edx+0xe0]" to CanTilesBeSupportedOnTerrain, taken once
+		// SmoothenNetwork has already succeeded. Returning false here is what
+		// produces failure code 0xF0000008, "Failed Smoothing Terrain".
+		//
+		// Replaced with a 5-byte "call rel32" plus one NOP, so the hook can widen
+		// the terrain height limits for drags that run alongside a portal.
+		constexpr uint32_t kPlaceNetworkCanTilesBeSupportedCall = 0x0063bb6b;
+		constexpr std::array<uint8_t, 6> kPlaceNetworkCanTilesBeSupportedBytes = {
+			0xFF, 0x92, 0xE0, 0x00, 0x00, 0x00
+		};
 	}
 }
