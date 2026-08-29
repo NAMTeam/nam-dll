@@ -52,8 +52,7 @@ namespace
 			{
 				SC4Point<int32_t> priorCell = {cellX + kNextX[entrySide], cellZ + kNextZ[entrySide]};
 				SC4List<cISC4Occupant*> occupants = SC4List<cISC4Occupant*>();
-				// TODO signature is wrong (arguments are topLeft, bottomRight points), see https://github.com/nsgomez/gzcom-dll/pull/37
-				(*sppOccupantManager)->GetOccupantsByStandardCityCells(occupants, &priorCell.x, &priorCell.x, (uint32_t)0xc772bf98, -1);
+				(*sppOccupantManager)->GetOccupantsByStandardCityCells(occupants, &priorCell, &priorCell, (uint32_t)0xc772bf98, -1);
 				if (!occupants.empty()) {
 					int32_t priorExitSide = (entrySide + 2) & 0x3;  // opposite of entrySide
 					// uint16_t mask = ~((uint16_t)0xf << (exitSide * 4));
@@ -180,11 +179,4 @@ void PathJumping::Install()
 	Patching::InstallHook(FindPath_Inject, FindPath_Hook);
 	Patching::InstallHook(FullSetPathNodeConnection_Inject, FullSetPathNodeConnection_Hook);
 	Patching::InstallHook(DoConnectionsChanged_Inject, DoConnectionsChanged_Hook);
-
-	// TODO The following seems not needed, or effects unclear:
-	/*
-	Patching::OverwriteMemory((void*)0x71b2c7, (uint8_t)0x3);
-	Patching::OverwriteMemory((void*)0x71b2d9, (uint8_t)0x6);  // 2*3
-	Patching::OverwriteMemory((void*)0x71b303, (uint8_t)0x3);
-	*/
 }
