@@ -51,6 +51,7 @@
 #include "FlexPieces.h"
 #include "CommuteLoop.h"
 #include "DirtRoadAccess.h"
+#include "TransitAccess.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -192,6 +193,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableFlexPuzzlePiecePatch, "FLEX Puzzle Piece RUL0 patch", FlexPieces::Install);
 		InstallWhen(settings.enableCommuteLoopPatch, "Eternal Commute Loop patch", CommuteLoop::Install);
 		InstallWhen(settings.enableDirtRoadAccessPatch, "DirtRoad/RHW Access patch", DirtRoadAccess::Install);
+		InstallWhen(settings.enableTransitAccessPatch, "Transit Access patch", TransitAccess::Install);
 	}
 }
 

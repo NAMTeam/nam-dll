@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include "cISC4NetworkOccupant.h"
 #include "SC4Vector.h"
@@ -260,13 +261,33 @@ namespace nSC4Networks
 	static_assert(sizeof(cIntRule) == 0xfc);
 }
 
+// The traffic network map returned by cISC4City::GetTrafficNetwork.
+// Not yet fully deocded
+class cSC4TrafficNetworkMap
+{
+	public:
+		// Windows vtable slot 8 (0x00a8fed8+0x20 -> 0x004b0b20). Returns the first network
+		// occupant on the cell that satisfies HasAnyNetworkFlag(networkFlags), or
+		// null.
+		typedef cISC4NetworkOccupant* (__thiscall* pfn_FindNetworkOccupant)(
+			cSC4TrafficNetworkMap* pThis, int32_t x, int32_t z, uint32_t networkFlags, bool useCache);
+		static constexpr size_t kFindNetworkOccupantVTableIndex = 8;
+
+		inline cISC4NetworkOccupant* FindNetworkOccupant(int32_t x, int32_t z, uint32_t networkFlags, bool useCache) {
+			void** const vtable = *reinterpret_cast<void***>(this);
+			auto* const findNetworkOccupant =
+				reinterpret_cast<pfn_FindNetworkOccupant>(vtable[kFindNetworkOccupantVTableIndex]);
+			return findNetworkOccupant(this, x, z, networkFlags, useCache);
+		}
+};
+
 class cSC4PathFinder
 {
 	public:
 		uint8_t RESERVED[0xc];
 		cISC4TrafficSimulator* trafficSimulator;
 		uint8_t RESERVED[0x18 - 0x10];
-		SC4Rect<int32_t> rect1;  // starting point
+		SC4Rect<int32_t> sourceRect;  // starting point
 		SC4Rect<int32_t> rect2;  // nearest standard destination
 		uint8_t RESERVED[0x48 - 0x38];
 		SC4Rect<int32_t> rect3;  // blocked/originating city edge (for routes coming from neighboring city)
@@ -277,4 +298,6 @@ class cSC4PathFinder
 		SC4Point<int32_t> cityCellCount;
 		// rest unknown, much missing
 };
+static_assert(offsetof(cSC4PathFinder, trafficSimulator) == 0xc);
+static_assert(offsetof(cSC4PathFinder, sourceRect) == 0x18);
 static_assert(offsetof(cSC4PathFinder, cityCellCount) == 0xb8);
