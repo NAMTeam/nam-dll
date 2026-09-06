@@ -29,6 +29,7 @@ set(NAM_SOURCES
     src/NAMDllDirector.cpp
     src/NetworkSlopes.cpp
     src/Patching.cpp
+    src/PathJumping.cpp
     src/RuleEquivalence.cpp
     src/Rul2Engine.cpp
     src/SC4VersionDetection.cpp

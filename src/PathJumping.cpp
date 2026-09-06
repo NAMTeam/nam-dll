@@ -32,8 +32,7 @@ namespace
 		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::Monorail);
 
 	// largely imitates RemoveBadElevatedPaths, without masking out earlier bits
-	void __thiscall RemoveBadElevatedPaths2(
-			cISC4TrafficSimulator* pThis,
+	void RemoveBadElevatedPaths2(
 			int32_t cellX,
 			int32_t cellZ,
 			cSC4PathInfo* pathInfo,
@@ -106,7 +105,7 @@ namespace
 				cellConnections.priorCarConnectionsPerEntrySide[entrySide] &= mask;
 			}
 			auto pathInfo = (cSC4PathInfo*)networkOccupant.GetPathInfo();
-			RemoveBadElevatedPaths2(trafficSimulator, cellX, cellZ, pathInfo, entrySide, exitSide, cellConnections, transitNetwork);
+			RemoveBadElevatedPaths2(cellX, cellZ, pathInfo, entrySide, exitSide, cellConnections, transitNetwork);
 		}
 	}
 
