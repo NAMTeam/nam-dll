@@ -10,10 +10,11 @@ public:
 	};
 	static_assert(sizeof(HashMapNode) == 4 + ((sizeof(Key)-1)/4 + 1) * 4 + ((sizeof(Value)-1)/4 + 1) * 4);
 
+	uint32_t RESERVED;  // unknown
 	// a vector of buckets each storing a singly-linked list of key-value pairs
 	HashMapNode** mpStart;
 	HashMapNode** mpEnd;
-	uint32_t RESERVED;  // probably capacity from SC4Vector
+	HashMapNode** mpCapacity;
 	uint32_t mSize;
 
 private:

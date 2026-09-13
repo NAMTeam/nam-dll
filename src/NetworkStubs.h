@@ -234,7 +234,6 @@ namespace nSC4Networks
 		uint8_t RESERVED[3];
 		SC4Vector<SC4Point<int32_t>> staticCells;
 		SC4Vector<cIntCheckCell> checkCells;
-		uint8_t RESERVED[0x68 - 0x64];
 		SC4HashMap<uint8_t, CheckType> checkTypes;
 		uint8_t RESERVED[0x9c - 0x78];
 		SC4Vector<uint8_t> constraints;  // for slopes of static cells
@@ -246,7 +245,6 @@ namespace nSC4Networks
 		uint32_t autoTileGridWidth;
 		uint32_t autoTileBase;
 		uint32_t autoPathBase;
-		uint8_t RESERVED[0xd4 - 0xd0];
 		SC4HashMap<AutoTileIndex, cTileDef> tileDefs;
 		uint32_t networkFlags;
 		uint8_t oneWayDir;
@@ -314,7 +312,7 @@ class cSC4PathInfo
 	public:
 
 		void* vtable;
-		uint8_t RESERVED[0x20 - 0x4];
+		uint8_t RESERVED[0x1c - 0x4];
 		SC4HashMap<uint32_t, cISC4PathInfo::tPath> pathMap;
 		// rest unknown
 
@@ -328,7 +326,7 @@ class cSC4PathInfo
 				float tolerance);
 		static inline pfn_GetPathsNearEndPoint GetPathsNearEndPoint = reinterpret_cast<pfn_GetPathsNearEndPoint>(0x53e350);
 };
-static_assert(offsetof(cSC4PathInfo, pathMap) == 0x20);
+static_assert(offsetof(cSC4PathInfo, pathMap) == 0x1c);
 
 struct TrafficSimCellConnections  // real name unknown
 {
