@@ -17,7 +17,7 @@
 
 compile:
 	cd src && \
-		clang-cl -target i386-pc-windows-msvc -ferror-limit=1 -fuse-ld=lld-link \
+		clang-cl -target i386-pc-windows-msvc -ferror-limit=10 -fuse-ld=lld-link \
 		-Wno-inconsistent-missing-override \
 		/std:c++20 /EHsc /LD /MD \
 		/W3 \

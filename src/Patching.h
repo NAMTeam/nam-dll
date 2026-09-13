@@ -16,4 +16,5 @@ namespace Patching
 	void PatchTestEaxImmediate32(uint32_t address, uint32_t expectedValue, uint32_t newValue);
 
 	void InstallHook(uint32_t address, void (*pfnFunc)(void));
+	void InstallCallHook(uint32_t address, void (*pfnFunc)(void));
 }
