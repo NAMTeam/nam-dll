@@ -6,7 +6,10 @@
 #include "cISC4Occupant.h"
 #include "cISC4OccupantManager.h"
 #include "cISC4TrafficSimulator.h"
+#include "Masking.h"
 
+using TN = TransitNetwork;
+using TT = cISC4TrafficSimulator::TravelType;
 
 namespace
 {
@@ -17,19 +20,11 @@ namespace
 	const uint32_t kTravelModeToTransitNetwork[] = {0, 1, 1, 2, 1, 2, 3, 4, 5};  // indexed by TravelType
 
 	// We deliberately do not include pedestrians here, as they often contain too many combinations of connections to be useful in priorCarConnectionsPerEntrySide
-	constexpr uint32_t multiLevelTransitNetworksMask
-		= (1 << (uint32_t)TransitNetwork::Car)
-		| (1 << (uint32_t)TransitNetwork::Train)
-		| (1 << (uint32_t)TransitNetwork::Lightrail)
-		| (1 << (uint32_t)TransitNetwork::Monorail);
-	constexpr uint32_t multiLevelTravelModesMask
-		= (1 << (uint32_t)cISC4TrafficSimulator::TravelType::Car)
-		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::Bus)
-		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::PassangerTrain)
-		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::FreightTruck)
-		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::FreightTrain)
-		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::ElevatedTrain)
-		| (1 << (uint32_t)cISC4TrafficSimulator::TravelType::Monorail);
+	constexpr uint32_t multiLevelTransitNetworksMask =
+		asMask(TN::Car, TN::Train, TN::Lightrail, TN::Monorail);
+	constexpr uint32_t multiLevelTravelModesMask = asMask(
+			TT::Car, TT::Bus, TT::PassangerTrain, TT::FreightTruck,
+			TT::FreightTrain, TT::ElevatedTrain, TT::Monorail);
 
 	// largely imitates RemoveBadElevatedPaths, without masking out earlier bits
 	void RemoveBadElevatedPaths2(
@@ -98,7 +93,7 @@ namespace
 				cellConnections.entryExitConnectionsPerTravelType[travelMode] |= (uint16_t)1 << (entrySide * 4 + exitSide);
 			}
 		}
-		if (((1 << (uint32_t)transitNetwork) & multiLevelTransitNetworksMask) != 0) {  // TODO in highly connected cases, this might clear too much
+		if ((asMask(transitNetwork) & multiLevelTransitNetworksMask) != 0) {  // TODO in highly connected cases, this might clear too much
 			// initially, clear connections for entry/exit
 			uint16_t mask = ~((uint16_t)0xf << (exitSide * 4));
 			if ((cellConnections.priorCarConnectionsPerEntrySide[entrySide] | mask) == (uint16_t)0xffff) {

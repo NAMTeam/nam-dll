@@ -3,12 +3,11 @@
 #include "cISC4NetworkOccupant.h"
 #include "cISC4TrafficSimulator.h"
 #include "NetworkStubs.h"
-
-#define TN_MASK(n) (1 << static_cast<uint32_t>(TransitNetwork::n))
-#define NW_MASK(n) (1 << static_cast<uint32_t>(cISC4NetworkOccupant::eNetworkType::n))
+#include "Masking.h"
 
 using TT = cISC4TrafficSimulator::TravelType;
 using NN = cISC4NetworkOccupant::eNetworkType;
+using TN = TransitNetwork;
 
 namespace
 {
@@ -16,18 +15,18 @@ namespace
 	constexpr uint32_t travelTypeAttrAddr = 0xb09628;
 
 	constexpr uint32_t roadTransitTypesOrig = 0x03;
-	static_assert(roadTransitTypesOrig == (TN_MASK(Pedestrian) | TN_MASK(Car)));
-	constexpr uint32_t roadTransitTypesNew = roadTransitTypesOrig | TN_MASK(Lightrail);
+	static_assert(roadTransitTypesOrig == asMask(TN::Pedestrian, TN::Car));
+	constexpr uint32_t roadTransitTypesNew = roadTransitTypesOrig | asMask(TN::Lightrail);
 	constexpr uint32_t railTransitTypesOrig = 0x04;
-	static_assert(railTransitTypesOrig == TN_MASK(Train));
-	constexpr uint32_t railTransitTypesNew = railTransitTypesOrig | TN_MASK(Monorail);
+	static_assert(railTransitTypesOrig == asMask(TN::Train));
+	constexpr uint32_t railTransitTypesNew = railTransitTypesOrig | asMask(TN::Monorail);
 
 	constexpr uint32_t lightrailTravelNetworksOrig = 0x0300;
-	static_assert(lightrailTravelNetworksOrig == (NW_MASK(Monorail) | NW_MASK(LightRail)));
-	constexpr uint32_t lightrailTravelNetworksNew = lightrailTravelNetworksOrig | NW_MASK(Road) | NW_MASK(Street) | NW_MASK(Avenue);
+	static_assert(lightrailTravelNetworksOrig == asMask(NN::Monorail, NN::LightRail));
+	constexpr uint32_t lightrailTravelNetworksNew = lightrailTravelNetworksOrig | asMask(NN::Road, NN::Street, NN::Avenue);
 	constexpr uint32_t monorailTravelNetworksOrig = 0x0300;
-	static_assert(monorailTravelNetworksOrig == (NW_MASK(Monorail) | NW_MASK(LightRail)));
-	constexpr uint32_t monorailTravelNetworksNew = monorailTravelNetworksOrig | NW_MASK(Rail);
+	static_assert(monorailTravelNetworksOrig == asMask(NN::Monorail, NN::LightRail));
+	constexpr uint32_t monorailTravelNetworksNew = monorailTravelNetworksOrig | asMask(NN::Rail);
 
 	const uint32_t railNetworkTravelTypeToLText[][2] = {
 		{static_cast<uint32_t>(TT::PassangerTrain), 0x4B8B4693},
