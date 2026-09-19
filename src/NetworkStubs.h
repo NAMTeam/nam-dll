@@ -337,3 +337,13 @@ struct TrafficSimCellConnections  // real name unknown
 	uint8_t RESERVED;
 };
 static_assert(sizeof(TrafficSimCellConnections) == 0x2e);
+
+struct TravelTypeAttr  // real name unknown
+{
+	uint32_t RESERVED;
+	float RESERVED;
+	float RESERVED;
+	uint32_t networkFlags;
+	cISC4PathInfo::tPathType pathType;
+};
+static_assert(sizeof(TravelTypeAttr) == 0x14);
