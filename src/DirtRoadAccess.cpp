@@ -1,6 +1,9 @@
 #include "DirtRoadAccess.h"
 #include "Patching.h"
 #include "cISC4NetworkOccupant.h"
+#include "Masking.h"
+
+using NN = cISC4NetworkOccupant::eNetworkType;
 
 namespace
 {
@@ -9,12 +12,14 @@ namespace
 	constexpr uint32_t kFerryTerminalRoadAccessNetworkMaskPushAddress = 0x006c1726;
 	constexpr uint32_t kCalculateRoadAccessNetworkMaskPushAddress = 0x006c1bd1;
 
-	using DirtRoadAccess::kAdjustedMotorizedVehicleNetworkMask;
-	using DirtRoadAccess::kDirtRoadNetworkMask;
-	using DirtRoadAccess::kVanillaMotorizedVehicleNetworkMask;
+	// Road, Street, Avenue and OneWayRoad: the mask the game uses to recognize a road-like connection.
+	constexpr uint32_t kVanillaMotorizedVehicleNetworkMask = 0x00000449;
+	static_assert(kVanillaMotorizedVehicleNetworkMask == asMask(NN::Road, NN::Street, NN::Avenue, NN::OneWayRoad));
+	constexpr uint32_t kAdjustedMotorizedVehicleNetworkMask = kVanillaMotorizedVehicleNetworkMask | asMask(NN::DirtRoad);
 
 	constexpr uint32_t kVanillaLowPrioFacingNetworkMask = 0x00000408;
-	constexpr uint32_t kAdjustedLowPriorityFacingNetworkMask = kVanillaLowPrioFacingNetworkMask | kDirtRoadNetworkMask;
+	static_assert(kVanillaLowPrioFacingNetworkMask == asMask(NN::Street, NN::OneWayRoad));
+	constexpr uint32_t kAdjustedLowPriorityFacingNetworkMask = kVanillaLowPrioFacingNetworkMask | asMask(NN::DirtRoad);
 
 	auto sInstalled = false;
 }
@@ -33,7 +38,6 @@ void DirtRoadAccess::Install() {
       kGetLotFacingStreetCountScoringMaskTestAddress,
       kVanillaLowPrioFacingNetworkMask, kAdjustedLowPriorityFacingNetworkMask);
 
-  // Set last so that partial install does not make other patches believe dirt roads are road access.
   sInstalled = true;
 }
 
