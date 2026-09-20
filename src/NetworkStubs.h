@@ -8,6 +8,7 @@
 #include "RotFlip.h"
 #include "SC4Rect.h"
 #include "cISC4City.h"
+#include "cS3DVector3.h"
 
 // The RESERVED macro provides names for reserved or unknown struct fields
 #define _CONCATNAM(x,y) x ## y
@@ -234,7 +235,6 @@ namespace nSC4Networks
 		uint8_t RESERVED[3];
 		SC4Vector<SC4Point<int32_t>> staticCells;
 		SC4Vector<cIntCheckCell> checkCells;
-		uint8_t RESERVED[0x68 - 0x64];
 		SC4HashMap<uint8_t, CheckType> checkTypes;
 		uint8_t RESERVED[0x9c - 0x78];
 		SC4Vector<uint8_t> constraints;  // for slopes of static cells
@@ -246,7 +246,6 @@ namespace nSC4Networks
 		uint32_t autoTileGridWidth;
 		uint32_t autoTileBase;
 		uint32_t autoPathBase;
-		uint8_t RESERVED[0xd4 - 0xd0];
 		SC4HashMap<AutoTileIndex, cTileDef> tileDefs;
 		uint32_t networkFlags;
 		uint8_t oneWayDir;
@@ -301,3 +300,73 @@ class cSC4PathFinder
 static_assert(offsetof(cSC4PathFinder, trafficSimulator) == 0xc);
 static_assert(offsetof(cSC4PathFinder, sourceRect) == 0x18);
 static_assert(offsetof(cSC4PathFinder, cityCellCount) == 0xb8);
+
+enum class TransitNetwork : uint32_t {
+	Pedestrian = 0,
+	Car = 1,
+	Train = 2,
+	Subway = 3,
+	Lightrail = 4,
+	Monorail = 5,
+};
+
+// TODO move to gzcom-dll
+namespace cISC4PathInfo
+{
+	enum class tPathType : uint32_t {
+		Car = 1,
+		Sim = 2,
+		Train = 3,
+		Subway = 4,
+		// 5 = unknown/unused
+		Lightrail = 6,
+		Monorail = 7,
+	};
+
+	struct tPath
+	{
+		SC4Vector<cS3DVector3> coords;
+		float length;
+	};
+}
+
+class cSC4PathInfo
+{
+	public:
+
+		void* vtable;
+		uint8_t RESERVED[0x1c - 0x4];
+		SC4HashMap<uint32_t, cISC4PathInfo::tPath> pathMap;
+		// rest unknown
+
+		typedef void (__thiscall* pfn_GetPathsNearEndPoint)(
+				cSC4PathInfo* pThis,
+				SC4Vector<uint32_t> &buffer,  // TODO or SC4Vector<pair<uint32_t, cISC4PathInfo::tPath>> ?
+				cISC4PathInfo::tPathType pathType,
+				cS3DVector3 const &point,
+				uint8_t entrySide,
+				uint8_t exitSide,
+				float tolerance);
+		static inline pfn_GetPathsNearEndPoint GetPathsNearEndPoint = reinterpret_cast<pfn_GetPathsNearEndPoint>(0x53e350);
+};
+static_assert(offsetof(cSC4PathInfo, pathMap) == 0x1c);
+
+struct TrafficSimCellConnections  // real name unknown
+{
+	uint16_t entryExitConnectionsPerTravelType[9];  // entry * 4 + exit (4×4 bits encoding valid entry/exit combos)
+	uint16_t exitTravelTypePerSidePerEntryTravelType[9];  // 4×4 bits (for each exit side, a 4-bit number defining corresponding exit travel type (for transit switches?))
+	uint16_t priorCarConnectionsPerEntrySide[4];  // exit * 4 + 'previous cell entry' (car only: for each entry/exit, encodes valid entries to prior adjacent cells (to avoid height level jumping))
+	uint8_t wormholeFlags;  // 2^0=subway station, 2^1=tunnel, 2^2=ferry
+	uint8_t RESERVED;
+};
+static_assert(sizeof(TrafficSimCellConnections) == 0x2e);
+
+struct TravelTypeAttr  // real name unknown
+{
+	uint32_t RESERVED;
+	float RESERVED;
+	float RESERVED;
+	uint32_t networkFlags;
+	cISC4PathInfo::tPathType pathType;
+};
+static_assert(sizeof(TravelTypeAttr) == 0x14);

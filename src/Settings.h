@@ -17,5 +17,7 @@ public:
 	bool enableCommuteLoopPatch;
 	bool enableDirtRoadAccessPatch;
 	bool enableTransitAccessPatch;
+	bool enableVerticalPathSeparationPatch;
+	bool enableDualNetworkTransitPatch;
 	bool enableKeyboardShortcuts;
 };
