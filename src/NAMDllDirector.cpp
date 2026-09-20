@@ -51,6 +51,7 @@
 #include "FlexPieces.h"
 #include "CommuteLoop.h"
 #include "DirtRoadAccess.h"
+#include "TransitAccess.h"
 #include "PathJumping.h"
 #include "TransitNetworkMapping.h"
 
@@ -194,6 +195,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableFlexPuzzlePiecePatch, "FLEX Puzzle Piece RUL0 patch", FlexPieces::Install);
 		InstallWhen(settings.enableCommuteLoopPatch, "Eternal Commute Loop patch", CommuteLoop::Install);
 		InstallWhen(settings.enableDirtRoadAccessPatch, "DirtRoad/RHW Access patch", DirtRoadAccess::Install);
+		InstallWhen(settings.enableTransitAccessPatch, "Transit Access patch", TransitAccess::Install);
 		InstallWhen(settings.enableVerticalPathSeparationPatch, "Vertical Path Separation patch", PathJumping::Install);
 		InstallWhen(settings.enableDualNetworkTransitPatch, "Dual Network Transit patch", TransitNetworkMapping::Install);
 	}
