@@ -25,23 +25,23 @@ namespace
 }
 
 void DirtRoadAccess::Install() {
-  Patching::PatchPushImmediate32(kCalculateRoadAccessNetworkMaskPushAddress,
-                                 kVanillaMotorizedVehicleNetworkMask,
-                                 kAdjustedMotorizedVehicleNetworkMask);
-  Patching::PatchPushImmediate32(kFerryTerminalRoadAccessNetworkMaskPushAddress,
-                                 kVanillaMotorizedVehicleNetworkMask,
-                                 kAdjustedMotorizedVehicleNetworkMask);
-  Patching::PatchPushImmediate32(kGetLotFacingStreetCountNetworkMaskPushAddress,
-                                 kVanillaMotorizedVehicleNetworkMask,
-                                 kAdjustedMotorizedVehicleNetworkMask);
-  Patching::PatchTestEaxImmediate32(
-      kGetLotFacingStreetCountScoringMaskTestAddress,
-      kVanillaLowPrioFacingNetworkMask, kAdjustedLowPriorityFacingNetworkMask);
+	Patching::PatchPushImmediate32(kCalculateRoadAccessNetworkMaskPushAddress,
+			kVanillaMotorizedVehicleNetworkMask,
+			kAdjustedMotorizedVehicleNetworkMask);
+	Patching::PatchPushImmediate32(kFerryTerminalRoadAccessNetworkMaskPushAddress,
+			kVanillaMotorizedVehicleNetworkMask,
+			kAdjustedMotorizedVehicleNetworkMask);
+	Patching::PatchPushImmediate32(kGetLotFacingStreetCountNetworkMaskPushAddress,
+			kVanillaMotorizedVehicleNetworkMask,
+			kAdjustedMotorizedVehicleNetworkMask);
+	Patching::PatchTestEaxImmediate32(kGetLotFacingStreetCountScoringMaskTestAddress,
+			kVanillaLowPrioFacingNetworkMask,
+			kAdjustedLowPriorityFacingNetworkMask);
 
-  sInstalled = true;
+	sInstalled = true;
 }
 
 uint32_t DirtRoadAccess::GetMotorizedVehicleNetworkMask() {
-  return sInstalled ? kAdjustedMotorizedVehicleNetworkMask
-                    : kVanillaMotorizedVehicleNetworkMask;
+	return sInstalled ? kAdjustedMotorizedVehicleNetworkMask
+		: kVanillaMotorizedVehicleNetworkMask;
 }
