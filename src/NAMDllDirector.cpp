@@ -2,7 +2,7 @@
  * This file is part of nam-dll, a DLL Plugin for SimCity 4
  * that improves interoperability with the Network Addon Mod.
  *
- * Copyright (c) 2023 NAM Team contributors
+ * Copyright (c) 2023, 2024 NAM Team contributors
  *
  * nam-dll is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -18,31 +18,62 @@
  * along with nam-dll.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Check4GBPatch.h"
 #include "Logger.h"
+#include "Settings.h"
 #include "SC4VersionDetection.h"
 #include "version.h"
 #include "cIGZCOM.h"
-#include "cRZCOMDllDirector.h"
+#include "cIGZFrameWork.h"
+#include "cIGZMessage2.h"
+#include "cIGZMessage2Standard.h"
+#include "cIGZMessageServer2.h"
+#include "cGZPersistResourceKey.h"
+#include "cRZAutoRefCount.h"
+#include "cIGZPersistResourceManager.h"
+#include "cIGZWinKeyAccelerator.h"
+#include "cIGZWinKeyAcceleratorRes.h"
+#include "cIGZWin.h"
+#include "cIGZWinMgr.h"
+#include "cISC4App.h"
+#include "cISC4City.h"
+#include "cISC4AdvisorSystem.h"
+#include "cISCLua.h"
+#include "cISC4View3DWin.h"
+#include "cRZMessage2COMDirector.h"
+#include "GZServPtrs.h"
 #include <Windows.h>
 #include "wil/resource.h"
 #include "wil/win32_helpers.h"
-
-#ifdef __clang__
-#define NAKED_FUN __attribute__((naked))
-#else
-#define NAKED_FUN __declspec(naked)
-#endif
+#include "Patching.h"
+#include "Rul2Engine.h"
+#include "NetworkSlopes.h"
+#include "FlexPieces.h"
+#include "CommuteLoop.h"
+#include "DirtRoadAccess.h"
+#include "PathJumping.h"
+#include "TransitNetworkMapping.h"
+#include "TransportMenuPatch.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
+static constexpr uint32_t kSC4MessagePostCityInit = 0x26D31EC1;
+
+static constexpr uint32_t kMonorailKeyboardShortcut = 0x8BE098F4;
+static constexpr uint32_t kOneWayRoadKeyboardShortcut = 0x4BE098F7;
+static constexpr uint32_t kDirtRoadKeyboardShortcut = 0x6BE098FA;
+static constexpr uint32_t kGroundHighwayKeyboardShortcut = 0x4BE098FD;
+
+static constexpr uint32_t kGZWin_WinSC4App = 0x6104489a;
+static constexpr uint32_t kGZWin_SC4View3DWin = 0x9a47b417;
+
 static constexpr std::string_view PluginLogFileName = "NAM.log";
+static constexpr std::string_view SettingsFileName = "NAM.ini";
 
 static uint32_t DoTunnelChanged_InjectPoint;
 static uint32_t DoTunnelChanged_ContinueJump;
 static uint32_t DoTunnelChanged_ReturnJump;
-
-static uint32_t DoTransportMenu_InjectPoint;
-static uint32_t DoTransportMenu_ContinueJump;
+static const float FerryMinimumBridgeHeight = 20.0f; // 20 meters
 
 namespace
 {
@@ -55,70 +86,25 @@ namespace
 		return temp.parent_path();
 	}
 
-	void OverwriteMemory(void* address, uint8_t newValue)
-	{
-		DWORD oldProtect;
-		// Allow the executable memory to be written to.
-		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect(
-			address,
-			sizeof(newValue),
-			PAGE_EXECUTE_READWRITE,
-			&oldProtect));
-
-		// Patch the memory at the specified address.
-		*((uint8_t*)address) = newValue;
-	}
-
-	void InstallHook(uint32_t address, void (*pfnFunc)(void))
-	{
-		DWORD oldProtect;
-		THROW_IF_WIN32_BOOL_FALSE(VirtualProtect((void *)address, 5, PAGE_EXECUTE_READWRITE, &oldProtect));
-
-		*((uint8_t*)address) = 0xE9;
-		*((uint32_t*)(address+1)) = ((uint32_t)pfnFunc) - address - 5;
-	}
-
 	void InstallDiagonalStreetsPatch()
 	{
-		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			OverwriteMemory((void*)0x637f80, 0xeb);
-			OverwriteMemory((void*)0x63aff2, 0xeb);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Draggable Diagonal Streets patch.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Draggable Diagonal Streets patch.\n%s",
-				e.what());
-		}
+		Patching::OverwriteMemory((void*)0x637f80, (uint8_t)0xeb);
+		Patching::OverwriteMemory((void*)0x63aff2, (uint8_t)0xeb);
 	}
 
 	void InstallDisableAutoconnectForStreetsPatch()
 	{
-		Logger& logger = Logger::GetInstance();
+		Patching::OverwriteMemory((void*)0x729fff, (uint8_t)0x00);
+	}
 
-		try
-		{
-			OverwriteMemory((void*)0x729fff, 0x00);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Disable auto-connect for RHW and Streets patch.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Disable auto-connect for RHW and Streets patch.\n%s",
-				e.what());
-		}
+	void InstallFerryBridgeHeightPatch()
+	{
+		// Replace the address of the float value that the game uses for its minimum
+		// ferry bridge height calculation with a pointer to our own float value.
+		//
+		// SC4's default minimum ferry bridge height is 30 meters above sea level,
+		// we replace that with a value that sets it to 20 meters above sea level.
+		Patching::OverwriteMemory((void*)0x6459bc, (uint32_t)&FerryMinimumBridgeHeight);
 	}
 
 	// TODO Currently this function is invoked with JMP+RET which can lead to suboptimal branch prediction due to imbalanced CALL+RET operations.
@@ -176,109 +162,55 @@ noMatchingTunnelNetwork:
 		}
 	}
 
-	void InstallTunnelsPatch(const uint16_t gameVersion)
+	void InstallTunnelsPatch()
+	{
+		DoTunnelChanged_InjectPoint = 0x714222;
+		DoTunnelChanged_ContinueJump = 0x714238;
+		DoTunnelChanged_ReturnJump = 0x714398;
+		Patching::InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
+	}
+
+	template <typename F>
+	void InstallWhen(bool when, const std::string_view &name, F&& installPatch)
 	{
 		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			switch (gameVersion)
-			{
-				case 641:
-					DoTunnelChanged_InjectPoint = 0x714222;
-					DoTunnelChanged_ContinueJump = 0x714238;
-					DoTunnelChanged_ReturnJump = 0x714398;
-					break;
-				default:
-					return;
-			}
-			InstallHook(DoTunnelChanged_InjectPoint, Hook_DoTunnelChanged);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Tunnels patch for RHW, Street and Lightrail.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Tunnels patch for RHW, Street and Lightrail.\n%s",
-				e.what());
+		if (!when) {
+			logger.WriteLineFormatted(LogLevel::Info, "Skipped installing the %s.", name);
+		} else try {
+			installPatch();
+			logger.WriteLineFormatted(LogLevel::Info, "Installed the %s.", name);
+		} catch (const wil::ResultException& e) {
+			logger.WriteLineFormatted(LogLevel::Error, "Failed to install the %s.\n%s", name, e.what());
 		}
 	}
 
-	void NAKED_FUN Hook_DoTransportMenu(void)
+	void InstallNamPatches(const Settings &settings)
 	{
-		// network menu groups:
-		// 0x4000 road menu
-		// 0x4001 rail menu
-		// 0x4002 subway menu
-		// 0x4003 power utility menu
-		// 0x4004 water utility menu
-		// 0x4005 highway menu
-		__asm {
-			mov ecx, 0x4006; // new seaport menu group (hopefully unused)
-			lea edi, [esi + 0x29c];
-			push DoTransportMenu_ContinueJump;
-			ret;
-		}
-	}
-
-	void InstallSeaportMenuPatch(const uint16_t gameVersion)
-	{
-		Logger& logger = Logger::GetInstance();
-
-		try
-		{
-			switch (gameVersion)
-			{
-				case 641:
-					DoTransportMenu_InjectPoint = 0x7f3d3b;
-					DoTransportMenu_ContinueJump = 0x7f3d43;
-					break;
-				default:
-					return;
-			}
-			InstallHook(DoTransportMenu_InjectPoint, Hook_DoTransportMenu);
-
-			logger.WriteLine(
-				LogLevel::Info,
-				"Installed the Seaport Menu patch.");
-		}
-		catch (const wil::ResultException& e)
-		{
-			logger.WriteLineFormatted(
-				LogLevel::Error,
-				"Failed to install the Seaport Menu patch.\n%s",
-				e.what());
-		}
-	}
-
-	void InstallMemoryPatches(const uint16_t gameVersion)
-	{
-		// Patch the game's memory to enable a few NAM features.
-		// These patches were all developed by memo.
-		InstallDiagonalStreetsPatch();
-		InstallDisableAutoconnectForStreetsPatch();
-		InstallTunnelsPatch(gameVersion);
-		InstallSeaportMenuPatch(gameVersion);
+		InstallWhen(settings.enableDiagonalStreets, "Draggable Diagonal Streets patch", InstallDiagonalStreetsPatch);
+		InstallWhen(settings.disableAutoconnect, "Disable auto-connect for RHW and Streets patch", InstallDisableAutoconnectForStreetsPatch);
+		InstallWhen(settings.enableTunnels, "Tunnels patch for RHW, Street and Lightrail", InstallTunnelsPatch);
+		InstallWhen(settings.reduceFerryBridgeHeightPatch, "Ferry Bridge Height patch", InstallFerryBridgeHeightPatch);
+		InstallWhen(settings.enableRUL2EnginePatch, "RUL2 Engine patch", Rul2Engine::Install);
+		InstallWhen(settings.enableNetworkSlopePatch, "Network Slopes patch", NetworkSlopes::Install);
+		InstallWhen(settings.enableFlexPuzzlePiecePatch, "FLEX Puzzle Piece RUL0 patch", FlexPieces::Install);
+		InstallWhen(settings.enableCommuteLoopPatch, "Eternal Commute Loop patch", CommuteLoop::Install);
+		InstallWhen(settings.enableDirtRoadAccessPatch, "DirtRoad/RHW Access patch", DirtRoadAccess::Install);
+		InstallWhen(settings.enableVerticalPathSeparationPatch, "Vertical Path Separation patch", PathJumping::Install);
+		InstallWhen(settings.enableDualNetworkTransitPatch, "Dual Network Transit patch", TransitNetworkMapping::Install);
+		InstallWhen(settings.enableTransportMenuPatch, "Transport Menu (Seaport/Airport) patch", TransportMenuPatch::Install);
 	}
 }
 
-class NAMDllDirector final : public cRZCOMDllDirector
+class NAMDllDirector final : public cRZMessage2COMDirector
 {
 public:
 
-	NAMDllDirector()
+	NAMDllDirector() : settings()
 	{
-		std::filesystem::path dllFolderPath = GetDllFolderPath();
-
-		std::filesystem::path logFilePath = dllFolderPath;
-		logFilePath /= PluginLogFileName;
-
 		Logger& logger = Logger::GetInstance();
-		logger.Init(logFilePath, LogLevel::Error);
+		logger.Init(GetDllFolderPath() / PluginLogFileName, LogLevel::Error);
 		logger.WriteLogFileHeader("NAM DLL v" PLUGIN_VERSION_STR);
+		Check4GBPatch::WritePatchStatusToLogFile();
 	}
 
 	uint32_t GetDirectorID() const
@@ -286,29 +218,224 @@ public:
 		return kNAMDllDirectorID;
 	}
 
+	void RegisterKeyboardShortcuts()
+	{
+		cIGZPersistResourceManagerPtr pResMan;
+
+		if (pResMan)
+		{
+			// We load our shortcuts from a private KEYCFG file and add them
+			// into the game when the city is initialized.
+			// This avoids the compatibility issues that come with overriding
+			// the game's main city/3D view KEYCFG file.
+
+			cGZPersistResourceKey key(0xA2E3D533, 0xFB577FA1, 0xBAFC749C);
+
+			cRZAutoRefCount<cIGZWinKeyAcceleratorRes> pKeyAcceleratorRes;
+
+			// GetPrivateResource fetches the resource without adding it to the game's
+			// in-memory resource cache.
+			if (pResMan->GetPrivateResource(
+				key,
+				kGZIID_cIGZWinKeyAcceleratorRes,
+				pKeyAcceleratorRes.AsPPVoid(),
+				0,
+				nullptr))
+			{
+				cISC4AppPtr pSC4App;
+
+				if (pSC4App)
+				{
+					cIGZWin* mainWindow = pSC4App->GetMainWindow();
+
+					if (mainWindow)
+					{
+						cIGZWin* pParentWin = mainWindow->GetChildWindowFromID(kGZWin_WinSC4App);
+
+						if (pParentWin)
+						{
+							cRZAutoRefCount<cISC4View3DWin> pView3D;
+
+							if (pParentWin->GetChildAs(
+								kGZWin_SC4View3DWin,
+								kGZIID_cISC4View3DWin,
+								pView3D.AsPPVoid()))
+							{
+								cIGZWinKeyAccelerator* pKeyAccelerator = pView3D->GetKeyAccelerator();
+
+								if (pKeyAccelerator)
+								{
+									pKeyAcceleratorRes->RegisterResources(pKeyAccelerator);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void RegisterDllVersionInLua() {
+		cISC4AppPtr pApp;
+		if (!pApp) {
+			return;
+		}
+		cISC4City* pCity = pApp->GetCity();
+		if (pCity)
+		{
+			cISC4AdvisorSystem* pAdvisorSystem = pCity->GetAdvisorSystem();
+			if (pAdvisorSystem)
+			{
+				cISCLua* const pLua = pAdvisorSystem->GetScriptingContext();
+				if (pLua)
+				{
+					const char* const kVersionVariableName = "nam_dll_version";
+					const std::string_view& version_str = PLUGIN_VERSION_STR;
+					pLua->PushLString(version_str.data(), version_str.size());
+					pLua->SetGlobal(kVersionVariableName);
+				}
+			}
+		}
+	}
+
+	void PostCityInit(cIGZMessage2Standard* pStandardMessage)
+	{
+		RegisterDllVersionInLua();
+		static bool logged = false;  // write log only once
+		if (!logged) {
+			InstallWhen(settings.enableKeyboardShortcuts, "Keyboard Shortcuts for Monorail, Onewayroad, Groundhighway, RHW", [this](){ this->RegisterKeyboardShortcuts(); });
+			logged = true;
+		} else {
+			RegisterKeyboardShortcuts();
+		}
+	}
+
+	void ProcessKeyboardShortcut(uint32_t dwMessageID)
+	{
+		cISC4AppPtr pSC4App;
+
+		if (pSC4App)
+		{
+			cIGZWin* mainWindow = pSC4App->GetMainWindow();
+
+			if (mainWindow)
+			{
+				cIGZWin* pParentWin = mainWindow->GetChildWindowFromID(kGZWin_WinSC4App);
+
+				if (pParentWin)
+				{
+					cRZAutoRefCount<cISC4View3DWin> pView3D;
+
+					if (pParentWin->GetChildAs(
+						kGZWin_SC4View3DWin,
+						kGZIID_cISC4View3DWin,
+						pView3D.AsPPVoid()))
+					{
+						// SC4's keyboard shortcuts work by passing the message ID cast to cIGZCommandParameterSet
+						// as the first cIGZCommandParameterSet parameter.
+						//
+						// The additional parameters (if any) will be wrapped in a cIGZCommandParameterSet and passed
+						// in the second cIGZCommandParameterSet parameter.
+						// The network tool shortcuts do not use the second parameter, so we use a placeholder value.
+
+						cIGZCommandParameterSet& command1 = *reinterpret_cast<cIGZCommandParameterSet*>(dwMessageID);
+						cIGZCommandParameterSet& command2 = *reinterpret_cast<cIGZCommandParameterSet*>(0xDEADBEEF);
+
+						pView3D->ProcessCommand(dwMessageID, command1, command2);
+					}
+				}
+			}
+		}
+	}
+
+	bool DoMessage(cIGZMessage2* pMsg)
+	{
+		cIGZMessage2Standard* pStandardMessage = static_cast<cIGZMessage2Standard*>(pMsg);
+		uint32_t msgType = pStandardMessage->GetType();
+
+		switch (msgType)
+		{
+		case kSC4MessagePostCityInit:
+			PostCityInit(pStandardMessage);
+			break;
+		case kMonorailKeyboardShortcut:
+		case kOneWayRoadKeyboardShortcut:
+		case kDirtRoadKeyboardShortcut:
+		case kGroundHighwayKeyboardShortcut:
+			ProcessKeyboardShortcut(msgType);
+			break;
+		}
+
+		return true;
+	}
+
+	bool PostAppInit()
+	{
+		Logger& logger = Logger::GetInstance();
+
+		cIGZMessageServer2Ptr pMsgServ;
+		if (pMsgServ)
+		{
+			std::vector<uint32_t> requiredNotifications;
+			requiredNotifications.push_back(kMonorailKeyboardShortcut);
+			requiredNotifications.push_back(kOneWayRoadKeyboardShortcut);
+			requiredNotifications.push_back(kDirtRoadKeyboardShortcut);
+			requiredNotifications.push_back(kGroundHighwayKeyboardShortcut);
+			requiredNotifications.push_back(kSC4MessagePostCityInit);
+
+			for (uint32_t messageID : requiredNotifications)
+			{
+				if (!pMsgServ->AddNotification(this, messageID))
+				{
+					logger.WriteLine(LogLevel::Error, "Failed to subscribe to the required notifications.");
+					return false;
+				}
+			}
+		}
+		else
+		{
+			logger.WriteLine(LogLevel::Error, "Failed to subscribe to the required notifications.");
+			return false;
+		}
+
+
+		return true;
+	}
+
 	bool OnStart(cIGZCOM* pCOM)
 	{
+		settings.Load(GetDllFolderPath() / SettingsFileName);
 		const uint16_t gameVersion = versionDetection.GetGameVersion();
 
 		if (gameVersion == 641)
 		{
-			InstallMemoryPatches(gameVersion);
+			InstallNamPatches(settings);
+
+			cIGZFrameWork* const pFramework = RZGetFrameWork();
+			if (pFramework->GetState() < cIGZFrameWork::kStatePreAppInit)
+			{
+				pFramework->AddHook(this);
+			}
+			else
+			{
+				PreAppInit();
+			}
 		}
 		else
 		{
 			Logger& logger = Logger::GetInstance();
 			logger.WriteLineFormatted(
 				LogLevel::Error,
-				"Requires game version 641, found game version %d.",
+				"The NAM patches require game version 641, found game version %d.",
 				gameVersion);
 		}
-
 		return true;
 	}
 
 private:
 
 	const SC4VersionDetection versionDetection;
+	Settings settings;
 };
 
 cRZCOMDllDirector* RZGetCOMDllDirector() {
