@@ -53,6 +53,7 @@
 #include "DirtRoadAccess.h"
 #include "PathJumping.h"
 #include "TransitNetworkMapping.h"
+#include "TransportMenuPatch.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -196,6 +197,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableDirtRoadAccessPatch, "DirtRoad/RHW Access patch", DirtRoadAccess::Install);
 		InstallWhen(settings.enableVerticalPathSeparationPatch, "Vertical Path Separation patch", PathJumping::Install);
 		InstallWhen(settings.enableDualNetworkTransitPatch, "Dual Network Transit patch", TransitNetworkMapping::Install);
+		InstallWhen(settings.enableTransportMenuPatch, "Transport Menu (Seaport/Airport) patch", TransportMenuPatch::Install);
 	}
 }
 

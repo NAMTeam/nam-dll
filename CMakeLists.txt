@@ -35,6 +35,7 @@ set(NAM_SOURCES
     src/SC4VersionDetection.cpp
     src/Settings.cpp
     src/TransitNetworkMapping.cpp
+    src/TransportMenuPatch.cpp
     src/version.rc
 )
 

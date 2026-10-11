@@ -18,5 +18,6 @@ public:
 	bool enableDirtRoadAccessPatch;
 	bool enableVerticalPathSeparationPatch;
 	bool enableDualNetworkTransitPatch;
+	bool enableTransportMenuPatch;
 	bool enableKeyboardShortcuts;
 };
