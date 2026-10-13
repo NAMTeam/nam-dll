@@ -12,6 +12,7 @@ Settings::Settings() :
 	enableFlexPuzzlePiecePatch(true),
 	enableCommuteLoopPatch(true),
 	enableDirtRoadAccessPatch(false),
+	enableTransitAccessPatch(true),
 	enableVerticalPathSeparationPatch(true),
 	enableDualNetworkTransitPatch(false),
 	enableTransportMenuPatch(true),
@@ -37,6 +38,7 @@ void Settings::Load(std::filesystem::path settingsFilePath)
 			readBoolProp("EnableFlexPuzzlePiecePatch", enableFlexPuzzlePiecePatch);
 			readBoolProp("EnableCommuteLoopPatch", enableCommuteLoopPatch);
 			readBoolProp("EnableDirtRoadAccessPatch", enableDirtRoadAccessPatch);
+			readBoolProp("EnableTransitAccessPatch", enableTransitAccessPatch);
 			readBoolProp("EnableVerticalPathSeparationPatch", enableVerticalPathSeparationPatch);
 			readBoolProp("EnableDualNetworkTransitPatch", enableDualNetworkTransitPatch);
 			readBoolProp("EnableTransportMenuPatch", enableTransportMenuPatch);

@@ -22,7 +22,7 @@
 
 std::ostream& operator<<(std::ostream& os, const cSC4NetworkTool::tSolvedCell& t)
 {
-    return os << "0x" << std::hex << t.id << "," << (t.rf & 0xff) << ":(" << (t.xz & 0xffff) << "," << (t.xz >> 16) << ")";
+	return os << "0x" << std::hex << t.id << "," << (t.rf & 0xff) << ":(" << (t.xz & 0xffff) << "," << (t.xz >> 16) << ")";
 }
 
 struct OverrideRuleNode
