@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <filesystem>
 
 class Settings final
@@ -16,6 +17,12 @@ public:
 	bool enableFlexPuzzlePiecePatch;
 	bool enableCommuteLoopPatch;
 	bool enableDirtRoadAccessPatch;
+	bool enableNeighborConnectionPatch;
+	bool enableRHWNeighborConnections;
+	bool enableOWRNeighborConnections;
+	bool enableNWMNeighborConnections;
+	uint32_t neighborConnectionMaxSearchDistance;
+	uint32_t neighborConnectionMaxGroupingGap;
 	bool enableVerticalPathSeparationPatch;
 	bool enableDualNetworkTransitPatch;
 	bool enableTransportMenuPatch;
