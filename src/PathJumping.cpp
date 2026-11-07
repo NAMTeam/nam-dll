@@ -79,7 +79,7 @@ namespace
 	}
 
 	void SetConnections(
-			cISC4TrafficSimulator* trafficSimulator,
+			cSC4TrafficSimulator* trafficSimulator,
 			int32_t cellX,
 			int32_t cellZ,
 			cISC4NetworkOccupant &networkOccupant,
@@ -93,14 +93,21 @@ namespace
 				cellConnections.entryExitConnectionsPerTravelType[travelMode] |= (uint16_t)1 << (entrySide * 4 + exitSide);
 			}
 		}
-		if ((asMask(transitNetwork) & multiLevelTransitNetworksMask) != 0) {  // TODO in highly connected cases, this might clear too much
-			// initially, clear connections for entry/exit
-			uint16_t mask = ~((uint16_t)0xf << (exitSide * 4));
-			if ((cellConnections.priorCarConnectionsPerEntrySide[entrySide] | mask) == (uint16_t)0xffff) {
-				cellConnections.priorCarConnectionsPerEntrySide[entrySide] &= mask;
+		if ((asMask(transitNetwork) & multiLevelTransitNetworksMask) != 0) {
+			// For unknown reasons, our aggregate approach to removing bad elevated paths blocks tunnels,
+			// so as a workaround, when a tunnel is detected, we skip the removal
+			uint16_t cellXZ = (cellX << 8) | cellZ;
+			auto& tunnelInfos = trafficSimulator->tunnelInfos;
+			bool foundTunnel = tunnelInfos.find(cellXZ) != tunnelInfos.end();  // hash map lookups are ok here, as DoConnectionsChanged is invoked only when the transit graph changes, not during actual path finding
+			if (!foundTunnel) {
+				// initially, clear connections for entry/exit
+				uint16_t mask = ~((uint16_t)0xf << (exitSide * 4));
+				if ((cellConnections.priorCarConnectionsPerEntrySide[entrySide] | mask) == (uint16_t)0xffff) {
+					cellConnections.priorCarConnectionsPerEntrySide[entrySide] &= mask;  // TODO in highly connected cases, this might clear too much
+				}
+				auto pathInfo = (cSC4PathInfo*)networkOccupant.GetPathInfo();
+				RemoveBadElevatedPaths2(cellX, cellZ, pathInfo, entrySide, exitSide, cellConnections, transitNetwork);
 			}
-			auto pathInfo = (cSC4PathInfo*)networkOccupant.GetPathInfo();
-			RemoveBadElevatedPaths2(cellX, cellZ, pathInfo, entrySide, exitSide, cellConnections, transitNetwork);
 		}
 	}
 
