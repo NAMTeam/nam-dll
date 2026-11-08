@@ -36,32 +36,32 @@ namespace
 			TrafficSimCellConnections &cellConnections,
 			TransitNetwork transitNetwork)
 	{
-		auto pathType = kPathType[(uint32_t)transitNetwork];
+		auto pathType = kPathType[static_cast<uint32_t>(transitNetwork)];
 		for (auto item = pathInfo->pathMap.begin(); item != pathInfo->pathMap.end(); item++) {
 			auto& key = item->first;
 			if (((key & 0xf0000000) == 0) &&  // not a stop point(?)
 				(((key >> 24) & 0xf) == pathType) &&
-				((uint8_t)(key >> 8) == (uint8_t)entrySide) &&
-				((uint8_t)key == (uint8_t)exitSide))
+				(static_cast<uint8_t>(key >> 8) == static_cast<uint8_t>(entrySide)) &&
+				(static_cast<uint8_t>(key) == static_cast<uint8_t>(exitSide)))
 			{
 				SC4Point<int32_t> priorCell = {cellX + kNextX[entrySide], cellZ + kNextZ[entrySide]};
 				SC4List<cISC4Occupant*> occupants = SC4List<cISC4Occupant*>();
-				(*sppOccupantManager)->GetOccupantsByStandardCityCells(occupants, &priorCell, &priorCell, (uint32_t)0xc772bf98, -1);
+				(*sppOccupantManager)->GetOccupantsByStandardCityCells(occupants, &priorCell, &priorCell, uint32_t{0xc772bf98}, -1);
 				if (!occupants.empty()) {
 					int32_t priorExitSide = (entrySide + 2) & 0x3;  // opposite of entrySide
-					// uint16_t mask = ~((uint16_t)0xf << (exitSide * 4));
+					// uint16_t mask = ~(uint16_t{0xf} << (exitSide * 4));
 					for (auto ppOccupant = occupants.begin(); ppOccupant != occupants.end(); ppOccupant++) {
 						auto&& occupant = *ppOccupant;
 						cISC4NetworkOccupant* priorNetworkOccupant = nullptr;
 						if (occupant->QueryInterface(0xa821ef94, reinterpret_cast<void**>(&priorNetworkOccupant))) {
 							if (priorNetworkOccupant->HasAnyNetworkFlag(0x1f4f)) {  // transit networks except Subway
 								auto& path = item->second;
-								auto priorPathInfo = (cSC4PathInfo*)priorNetworkOccupant->GetPathInfo();
+								auto priorPathInfo = reinterpret_cast<cSC4PathInfo*>(priorNetworkOccupant->GetPathInfo());
 								if (priorPathInfo != nullptr && !path.coords.empty()) {
 									uint16_t flagsGoodPriorPaths = 0;
 									constexpr float tolerance = 4.0f;
 									auto priorPathsKeys = SC4Vector<uint32_t>();
-									cSC4PathInfo::GetPathsNearEndPoint(priorPathInfo, priorPathsKeys, (cISC4PathInfo::tPathType)pathType, path.coords[0], -1, priorExitSide, tolerance);
+									cSC4PathInfo::GetPathsNearEndPoint(priorPathInfo, priorPathsKeys, static_cast<cISC4PathInfo::tPathType>(pathType), path.coords[0], -1, priorExitSide, tolerance);
 									for (auto priorPathKey = priorPathsKeys.begin(); priorPathKey != priorPathsKeys.end(); priorPathKey++) {
 										uint32_t priorEntrySide = (*priorPathKey >> 8) & 0xff;
 										flagsGoodPriorPaths |= (1 << priorEntrySide);
@@ -88,9 +88,9 @@ namespace
 			int32_t exitSide,
 			TransitNetwork transitNetwork)
 	{
-		for (uint32_t travelMode = (uint32_t)cISC4TrafficSimulator::TravelType::Walk; travelMode <= (uint32_t)cISC4TrafficSimulator::TravelType::Monorail; travelMode++) {
-			if ((uint32_t)transitNetwork == kTravelModeToTransitNetwork[travelMode]) {
-				cellConnections.entryExitConnectionsPerTravelType[travelMode] |= (uint16_t)1 << (entrySide * 4 + exitSide);
+		for (uint32_t travelMode = static_cast<uint32_t>(cISC4TrafficSimulator::TravelType::Walk); travelMode <= static_cast<uint32_t>(cISC4TrafficSimulator::TravelType::Monorail); travelMode++) {
+			if (static_cast<uint32_t>(transitNetwork) == kTravelModeToTransitNetwork[travelMode]) {
+				cellConnections.entryExitConnectionsPerTravelType[travelMode] |= uint16_t{1} << (entrySide * 4 + exitSide);
 			}
 		}
 		if ((asMask(transitNetwork) & multiLevelTransitNetworksMask) != 0) {
@@ -101,11 +101,11 @@ namespace
 			bool foundTunnel = tunnelInfos.find(cellXZ) != tunnelInfos.end();  // hash map lookups are ok here, as DoConnectionsChanged is invoked only when the transit graph changes, not during actual path finding
 			if (!foundTunnel) {
 				// initially, clear connections for entry/exit
-				uint16_t mask = ~((uint16_t)0xf << (exitSide * 4));
-				if ((cellConnections.priorCarConnectionsPerEntrySide[entrySide] | mask) == (uint16_t)0xffff) {
+				uint16_t mask = ~(uint16_t{0xf} << (exitSide * 4));
+				if ((cellConnections.priorCarConnectionsPerEntrySide[entrySide] | mask) == uint16_t{0xffff}) {
 					cellConnections.priorCarConnectionsPerEntrySide[entrySide] &= mask;  // TODO in highly connected cases, this might clear too much
 				}
-				auto pathInfo = (cSC4PathInfo*)networkOccupant.GetPathInfo();
+				auto pathInfo = reinterpret_cast<cSC4PathInfo*>(networkOccupant.GetPathInfo());
 				RemoveBadElevatedPaths2(cellX, cellZ, pathInfo, entrySide, exitSide, cellConnections, transitNetwork);
 			}
 		}
