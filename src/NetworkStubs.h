@@ -259,11 +259,25 @@ namespace nSC4Networks
 	static_assert(sizeof(cIntRule) == 0xfc);
 }
 
+class cSC4TrafficSimulator
+{
+	struct TunnelInfo {
+		uint8_t RESERVED[0x2c];
+		// size unconfirmed
+	};
+
+	public:
+		uint8_t RESERVED[0xc8];
+		SC4HashMap<uint16_t, TunnelInfo> tunnelInfos;
+		// rest unknown, much missing
+};
+static_assert(offsetof(cSC4TrafficSimulator, tunnelInfos) == 0xc8);
+
 class cSC4PathFinder
 {
 	public:
 		uint8_t RESERVED[0xc];
-		cISC4TrafficSimulator* trafficSimulator;
+		cSC4TrafficSimulator* trafficSimulator;
 		uint8_t RESERVED[0x18 - 0x10];
 		SC4Rect<int32_t> rect1;  // starting point
 		SC4Rect<int32_t> rect2;  // nearest standard destination
