@@ -19,5 +19,6 @@ public:
 	bool enableVerticalPathSeparationPatch;
 	bool enableDualNetworkTransitPatch;
 	bool enableTransportMenuPatch;
+	bool enableDirtRoadRegionalTransportMapPatch;
 	bool enableKeyboardShortcuts;
 };

@@ -15,6 +15,7 @@ Settings::Settings() :
 	enableVerticalPathSeparationPatch(true),
 	enableDualNetworkTransitPatch(false),
 	enableTransportMenuPatch(true),
+	enableDirtRoadRegionalTransportMapPatch(true),
 	enableKeyboardShortcuts(true) {};
 
 void Settings::Load(std::filesystem::path settingsFilePath)
@@ -40,6 +41,7 @@ void Settings::Load(std::filesystem::path settingsFilePath)
 			readBoolProp("EnableVerticalPathSeparationPatch", enableVerticalPathSeparationPatch);
 			readBoolProp("EnableDualNetworkTransitPatch", enableDualNetworkTransitPatch);
 			readBoolProp("EnableTransportMenuPatch", enableTransportMenuPatch);
+			readBoolProp("EnableDirtRoadRegionalTransportMapPatch", enableDirtRoadRegionalTransportMapPatch);
 		} else {
 			logger.WriteLine(LogLevel::Info, "Using default settings, as no NAM.ini configuration file was detected.");
 		}
