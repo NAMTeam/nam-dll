@@ -51,6 +51,7 @@
 #include "FlexPieces.h"
 #include "CommuteLoop.h"
 #include "DirtRoadAccess.h"
+#include "DirtRoadRegionalTransportMap.h"
 #include "PathJumping.h"
 #include "TransitNetworkMapping.h"
 #include "TransportMenuPatch.h"
@@ -198,6 +199,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableVerticalPathSeparationPatch, "Vertical Path Separation patch", PathJumping::Install);
 		InstallWhen(settings.enableDualNetworkTransitPatch, "Dual Network Transit patch", TransitNetworkMapping::Install);
 		InstallWhen(settings.enableTransportMenuPatch, "Transport Menu (Seaport/Airport) patch", TransportMenuPatch::Install);
+		InstallWhen(settings.enableDirtRoadRegionalTransportMapPatch, "DirtRoad/RHW Regional Transport Map patch", DirtRoadRegionalTransportMap::Install);
 	}
 }
 
