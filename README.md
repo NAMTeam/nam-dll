@@ -31,6 +31,18 @@ You can customize the shortcuts to use different keys, see the documentation at 
 If you are using a mod that alters the city keyboard shortcuts such as CasperVG's AutoHistorical DLL mod, you will need to edit the KEYCFG
 file included in that mod.
 
+### Water Pipe / Sewer Sides
+
+Companion of `Water_Pipe_Sewer.dat`, which draws every water pipe piece as a drinking-water pipe plus a sewer pipe
+underneath and contains a model variant for every combination of pipe sides.
+The DLL picks, for every pipe piece, the variant whose sides follow the pipe network: along every run of pipe the
+water pipe stays on the same side, so the two pipes never cross in curves, and on closed loops the water pipe is
+always on the inside. It also places the pipe-to-lot connection under pumps and buildings on the two pipes,
+independently of the camera rotation.
+
+Without `Water_Pipe_Sewer.dat` the patch has no visible effect. It can be disabled with `EnableWaterPipeSidesPatch=false`
+in [NAM.ini](src/NAM.ini).
+
 ## System Requirements
 
 * SimCity 4, version 1.1.641 (the digital release)

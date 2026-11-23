@@ -20,4 +20,5 @@ public:
 	bool enableDualNetworkTransitPatch;
 	bool enableTransportMenuPatch;
 	bool enableKeyboardShortcuts;
+	bool enableWaterPipeSidesPatch;
 };
