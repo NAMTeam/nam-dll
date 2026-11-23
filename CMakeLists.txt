@@ -36,6 +36,7 @@ set(NAM_SOURCES
     src/Settings.cpp
     src/TransitNetworkMapping.cpp
     src/TransportMenuPatch.cpp
+    src/WaterPipeSides.cpp
     src/version.rc
 )
 

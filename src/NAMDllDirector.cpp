@@ -54,6 +54,7 @@
 #include "PathJumping.h"
 #include "TransitNetworkMapping.h"
 #include "TransportMenuPatch.h"
+#include "WaterPipeSides.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -198,6 +199,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableVerticalPathSeparationPatch, "Vertical Path Separation patch", PathJumping::Install);
 		InstallWhen(settings.enableDualNetworkTransitPatch, "Dual Network Transit patch", TransitNetworkMapping::Install);
 		InstallWhen(settings.enableTransportMenuPatch, "Transport Menu (Seaport/Airport) patch", TransportMenuPatch::Install);
+		InstallWhen(settings.enableWaterPipeSidesPatch, "Water Pipe / Sewer Sides patch", WaterPipeSides::Install);
 	}
 }
 
