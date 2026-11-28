@@ -51,6 +51,7 @@
 #include "FlexPieces.h"
 #include "CommuteLoop.h"
 #include "DirtRoadAccess.h"
+#include "DirtRoadRegionalTransportMap.h"
 #include "PathJumping.h"
 #include "TransitNetworkMapping.h"
 #include "TransportMenuPatch.h"
@@ -202,6 +203,7 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableBridgeShoreAbutmentPatch, "Bridge Shore Abutment patch", BridgePatches::InstallShoreAbutmentPatch);
 		InstallWhen(settings.enableBridgeFarAbutmentClearancePatch, "Bridge Far Abutment Clearance patch", BridgePatches::InstallFarAbutmentClearancePatch);
 		InstallWhen(settings.enableParallelBridgesPatch, "Parallel Bridges patch (experimental)", BridgePatches::InstallParallelBridgesPatch);
+		InstallWhen(settings.enableDirtRoadRegionalTransportMapPatch, "DirtRoad/RHW Regional Transport Map patch", DirtRoadRegionalTransportMap::Install);
 	}
 }
 

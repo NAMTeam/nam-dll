@@ -22,5 +22,6 @@ public:
 	bool enableBridgeShoreAbutmentPatch;
 	bool enableBridgeFarAbutmentClearancePatch;
 	bool enableParallelBridgesPatch;
+	bool enableDirtRoadRegionalTransportMapPatch;
 	bool enableKeyboardShortcuts;
 };

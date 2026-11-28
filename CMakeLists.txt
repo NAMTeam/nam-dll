@@ -25,6 +25,7 @@ set(NAM_SOURCES
     src/Check4GBPatch.cpp
     src/CommuteLoop.cpp
     src/DirtRoadAccess.cpp
+    src/DirtRoadRegionalTransportMap.cpp
     src/FlexPieces.cpp
     src/Logger.cpp
     src/NAMDllDirector.cpp

@@ -14,22 +14,26 @@
 #   git submodule update --init
 #   make
 
+SHELL := /bin/bash
+
+CLANG=clang-cl
 
 compile:
-	cd src && \
-		clang-cl -target i386-pc-windows-msvc -ferror-limit=10 -fuse-ld=lld-link \
+	$(CLANG) -target i386-pc-windows-msvc -ferror-limit=10 -fuse-ld=lld-link \
 		-Wno-inconsistent-missing-override \
 		/std:c++20 /EHsc /LD /MD \
 		/W3 \
 		/Gy /Gd /O2 /Oi \
 		/D "_WIN32" /D "NDEBUG" /D "_UNICODE" /D "UNICODE" \
 		/D "_USRDLL" /D "_WINDLL" \
-		/imsvc ../vendor/xwin/crt/include /imsvc ../vendor/xwin/sdk/include/ucrt /imsvc ../vendor/xwin/sdk/include/um /imsvc ../vendor/xwin/sdk/include/shared \
-		/I ../vendor/gzcom-dll/gzcom-dll/include \
-		/I ../vendor/wil/include \
-		/I ../vendor/mINI/src \
-		/o NAM.dll ./*.cpp ../vendor/gzcom-dll/gzcom-dll/src/{cRZCOMDllDirector,cRZBaseString}.cpp \
-		/link /libpath:../vendor/xwin/crt/lib/x86 /libpath:../vendor/xwin/sdk/lib/um/x86 /libpath:../vendor/xwin/sdk/lib/ucrt/x86 \
+		/imsvc vendor/xwin/crt/include /imsvc vendor/xwin/sdk/include/ucrt /imsvc vendor/xwin/sdk/include/um /imsvc vendor/xwin/sdk/include/shared \
+		/I vendor/gzcom-dll/gzcom-dll/include \
+		/I vendor/wil/include \
+		/I vendor/mINI/src \
+		/o NAM.dll \
+		src/*.cpp \
+		vendor/gzcom-dll/gzcom-dll/src/{cRZCOMDllDirector,cRZBaseString}.cpp \
+		/link /libpath:vendor/xwin/crt/lib/x86 /libpath:vendor/xwin/sdk/lib/um/x86 /libpath:vendor/xwin/sdk/lib/ucrt/x86 \
 		version.lib ole32.lib
 #
 # /GL = whole program optimization -> not supported by clang
@@ -39,5 +43,7 @@ compile:
 # /MD = use DLL runtime (related with /LD)
 # /FC = full path diagnosticts -> not supported, not needed
 
+clean:
+	rm -f NAM.dll NAM.lib
 
-.PHONY: compile
+.PHONY: compile clean

@@ -1,0 +1,27 @@
+name: CI/CD
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    uses: memo33/sc4-dll-actions/.github/workflows/attested-build.yaml@c7aa3d2d748a9bd52a573a79f1f6ba78dde6f25f  # v1
+    with:
+      build-os: ubuntu-26.04
+      xwin-path: vendor/xwin
+      build-script: |
+        make CLANG=clang-cl-22
+        mkdir build-output
+        cp -p NAM.dll src/NAM.ini build-output
+      build-output: build-output
+      artifact-name: NAM-dll-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}.zip
+      attestation-subject-path: NAM.dll
+      prerelease: ${{ contains(github.ref_name, '-') }}
+    permissions:
+      id-token: write                # for attestation and deployment
+      attestations: write            # for attestation
+      artifact-metadata: write       # for attestation
+      contents: write                # for deploying a release
+
+  # TODO add `test` job
