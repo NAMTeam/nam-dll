@@ -11,9 +11,11 @@ namespace Patching
 {
 	void OverwriteMemory(void* address, uint8_t newValue);
 	void OverwriteMemory(void* address, uint32_t newValue);
+	void PatchImmediate16(uint32_t address, uint16_t expectedValue, uint16_t newValue);
 	void PatchImmediate32(uint32_t address, uint32_t expectedValue, uint32_t newValue);
 	void PatchPushImmediate32(uint32_t address, uint32_t expectedValue, uint32_t newValue);
 	void PatchTestEaxImmediate32(uint32_t address, uint32_t expectedValue, uint32_t newValue);
+	void PatchTestWordPtrEaxImmediate16(uint32_t address, uint16_t expectedValue, uint16_t newValue);
 
 	void InstallHook(uint32_t address, void (*pfnFunc)(void));
 	void InstallCallHook(uint32_t address, void (*pfnFunc)(void));

@@ -27,6 +27,7 @@ set(NAM_SOURCES
     src/FlexPieces.cpp
     src/Logger.cpp
     src/NAMDllDirector.cpp
+    src/NeighborConnections.cpp
     src/NetworkSlopes.cpp
     src/Patching.cpp
     src/PathJumping.cpp
