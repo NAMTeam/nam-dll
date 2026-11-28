@@ -47,9 +47,12 @@ namespace
 		bool& enableOWR,
 		bool& enableNWM)
 	{
-		enableRHW = false;
-		enableOWR = false;
-		enableNWM = false;
+		// A missing (or empty) key means "use the defaults", so the patch also works
+		// when NAM.ini is absent or predates NeighborConnectionNetworks.
+		if (networkList.empty())
+		{
+			return;
+		}
 
 		size_t tokenStart = 0;
 		while (tokenStart <= networkList.size())
@@ -103,10 +106,10 @@ Settings::Settings() :
 	enableFlexPuzzlePiecePatch(true),
 	enableCommuteLoopPatch(true),
 	enableDirtRoadAccessPatch(false),
-	enableNeighborConnectionPatch(false),
-	enableRHWNeighborConnections(false),
+	enableNeighborConnectionPatch(true),
+	enableRHWNeighborConnections(true),
 	enableOWRNeighborConnections(false),
-	enableNWMNeighborConnections(false),
+	enableNWMNeighborConnections(true),
 	neighborConnectionMaxSearchDistance(8),
 	neighborConnectionMaxGroupingGap(2),
 	enableVerticalPathSeparationPatch(true),
