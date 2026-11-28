@@ -55,6 +55,7 @@
 #include "PathJumping.h"
 #include "TransitNetworkMapping.h"
 #include "TransportMenuPatch.h"
+#include "BridgePatches.h"
 
 static constexpr uint32_t kNAMDllDirectorID = 0x4AC2AEFF;
 
@@ -199,6 +200,9 @@ noMatchingTunnelNetwork:
 		InstallWhen(settings.enableVerticalPathSeparationPatch, "Vertical Path Separation patch", PathJumping::Install);
 		InstallWhen(settings.enableDualNetworkTransitPatch, "Dual Network Transit patch", TransitNetworkMapping::Install);
 		InstallWhen(settings.enableTransportMenuPatch, "Transport Menu (Seaport/Airport) patch", TransportMenuPatch::Install);
+		InstallWhen(settings.enableBridgeShoreAbutmentPatch, "Bridge Shore Abutment patch", BridgePatches::InstallShoreAbutmentPatch);
+		InstallWhen(settings.enableBridgeFarAbutmentClearancePatch, "Bridge Far Abutment Clearance patch", BridgePatches::InstallFarAbutmentClearancePatch);
+		InstallWhen(settings.enableParallelBridgesPatch, "Parallel Bridges patch (experimental)", BridgePatches::InstallParallelBridgesPatch);
 		InstallWhen(settings.enableDirtRoadRegionalTransportMapPatch, "DirtRoad/RHW Regional Transport Map patch", DirtRoadRegionalTransportMap::Install);
 	}
 }

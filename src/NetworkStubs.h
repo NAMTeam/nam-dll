@@ -90,8 +90,8 @@ class cSC4NetworkTool
 
 		struct tDraggedStep
 		{
-			uint8_t RESERVED[4];
-			uint32_t draggedCellsIndex;
+			uint32_t firstCellIndex;  // into draggedCells
+			uint32_t lastCellIndex;  // into draggedCells, inclusive
 			uint32_t stepType;  // 0: regular/non-immovable, 1: bridge, 2: tunnel, 3: reserved
 		};
 		static_assert(sizeof(tDraggedStep) == 0xc);
@@ -152,14 +152,18 @@ class cSC4NetworkTool
 		void* vtable;
 		intptr_t RESERVED[6];
 		cSC4NetworkWorldCache networkWorldCache;
-		uint8_t RESERVED[4];
+		cISTETerrain* terrain;
 		intptr_t occupantManager;
 		uint8_t RESERVED[4];
 		bool placeById;
 		uint8_t RESERVED[3];
 		SC4Vector<tDraggedStep> draggedSteps;
 		SC4Vector<SC4Point<uint32_t>> draggedCells;
-		uint8_t RESERVED[0x98 - 0x6c];
+		uint8_t RESERVED[0x70 - 0x6c];
+		int32_t totalStepCount;
+		int32_t straightStepCount;  // steps before a bend of the drag
+		int32_t validStepCount;
+		uint8_t RESERVED[0x98 - 0x7c];
 		SC4Vector<tSolvedCell> solvedCells;
 		uint8_t RESERVED[0xcc - 0xa4];
 		SC4Vector<tIntersection> highwayIntersections;
@@ -172,7 +176,9 @@ class cSC4NetworkTool
 		uint8_t RESERVED[0x270 - 0x248];
 };
 static_assert(offsetof(cSC4NetworkTool, networkWorldCache) == 0x1c);
+static_assert(offsetof(cSC4NetworkTool, terrain) == 0x44);
 static_assert(offsetof(cSC4NetworkTool, draggedSteps) == 0x54);
+static_assert(offsetof(cSC4NetworkTool, validStepCount) == 0x78);
 static_assert(offsetof(cSC4NetworkTool, solvedCells) == 0x98);
 static_assert(offsetof(cSC4NetworkTool, vertexHtConstraintSatisfier1) == 0x124);
 static_assert(sizeof(cSC4NetworkTool) == 0x270);

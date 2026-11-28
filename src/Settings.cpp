@@ -15,6 +15,9 @@ Settings::Settings() :
 	enableVerticalPathSeparationPatch(true),
 	enableDualNetworkTransitPatch(false),
 	enableTransportMenuPatch(true),
+	enableBridgeShoreAbutmentPatch(true),
+	enableBridgeFarAbutmentClearancePatch(true),
+	enableParallelBridgesPatch(false),
 	enableDirtRoadRegionalTransportMapPatch(true),
 	enableKeyboardShortcuts(true) {};
 
@@ -41,6 +44,9 @@ void Settings::Load(std::filesystem::path settingsFilePath)
 			readBoolProp("EnableVerticalPathSeparationPatch", enableVerticalPathSeparationPatch);
 			readBoolProp("EnableDualNetworkTransitPatch", enableDualNetworkTransitPatch);
 			readBoolProp("EnableTransportMenuPatch", enableTransportMenuPatch);
+			readBoolProp("EnableBridgeShoreAbutmentPatch", enableBridgeShoreAbutmentPatch);
+			readBoolProp("EnableBridgeFarAbutmentClearancePatch", enableBridgeFarAbutmentClearancePatch);
+			readBoolProp("EnableParallelBridgesPatch", enableParallelBridgesPatch);
 			readBoolProp("EnableDirtRoadRegionalTransportMapPatch", enableDirtRoadRegionalTransportMapPatch);
 		} else {
 			logger.WriteLine(LogLevel::Info, "Using default settings, as no NAM.ini configuration file was detected.");
