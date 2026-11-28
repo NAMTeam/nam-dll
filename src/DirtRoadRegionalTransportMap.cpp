@@ -2,8 +2,6 @@
 #include "Patching.h"
 #include "cGZPersistResourceKey.h"
 #include "cIGZPersistResourceManager.h"
-#include "cIGZVariant.h"
-#include "cISCProperty.h"
 #include "cISCPropertyHolder.h"
 #include "cISCResExemplar.h"
 #include "cRZAutoRefCount.h"
@@ -71,20 +69,7 @@ namespace
 		if (!pResMan || !pResMan->GetResource(key, GZIID_cISCResExemplar, pExemplar.AsPPVoid(), 0, nullptr)) {
 			return false;
 		}
-
-		const cISCProperty* pProperty = pExemplar->AsISCPropertyHolder()->GetProperty(dirtRoadColorPropertyId);
-		const cIGZVariant* pValue = pProperty ? pProperty->GetPropertyValue() : nullptr;
-		if (!pValue) {
-			return false;
-		}
-		if (pValue->GetType() == cIGZVariant::Type::Uint32) {
-			return pValue->GetValUint32(color);
-		}
-		if (pValue->GetType() == cIGZVariant::Type::Uint32Array && pValue->GetCount() > 0) {
-			color = *pValue->RefUint32();
-			return true;
-		}
-		return false;
+		return pExemplar->AsISCPropertyHolder()->GetProperty(dirtRoadColorPropertyId, color);
 	}
 
 	uint32_t GetDirtRoadColor(const uint32_t* colorTable)
