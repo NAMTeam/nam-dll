@@ -65,6 +65,7 @@ See [LICENSE.txt](LICENSE.txt) for more information.
 [Windows Implementation Library](https://github.com/microsoft/wil) MIT License.
 [mINI](https://github.com/metayeti/mINI) MIT License.
 [SC4Fix](https://github.com/nsgomez/sc4fix) MIT License.
+[doctest](https://github.com/doctest/doctest) MIT License, used by the unit tests only.
 
 # Source Code
 
@@ -78,6 +79,20 @@ See [LICENSE.txt](LICENSE.txt) for more information.
 * Open the solution in the `src` folder
 * Update the post build events to copy the build output to you SimCity 4 application plugins folder.
 * Build the solution
+
+## Running the tests
+
+The unit tests cover the game-free parts of the DLL: the banding rules the
+neighbor connection patch uses to pair carriageways at a city edge. They need no
+SimCity 4 installation.
+
+```
+cmake -S . -B build -G "Visual Studio 17 2022" -A Win32
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+Configure with `-DNAM_BUILD_TESTS=OFF` to skip them.
 
 ## Debugging the plugin
 

@@ -1,4 +1,5 @@
 #include "NeighborConnections.h"
+#include "NeighborConnectionBanding.h"
 #include "Patching.h"
 #include "NetworkStubs.h"
 #include "Masking.h"
@@ -8,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 /*
 	Neighbor connection patch
@@ -32,8 +34,9 @@
 	  DirtRoad/RHW type. Because of that, enabling OWR necessarily also
 	  enables the RHW part of this patch.
 
-	- NWM: adds Road to the divided-network mask, but only uses the custom
-	  return search when the Road edge tile is clearly one-way (i.e. half of a AVE-6).
+	- NWM: adds Road to the divided-network mask, but only uses the custom return
+	  search when the Road edge tile carries car traffic in one direction only
+	  (a Road-network tile such as one half of an AVE-6, not the OWR network).
 	  Normal Road neighbor connections are bidirectional, so they are left alone.
 
 	Return-tile matching
@@ -65,10 +68,24 @@
 	tile in a three-lane outgoing side paired with the corresponding tile in a
 	three-lane incoming side, while still handling unequal band widths by
 	scaling the index.
+
+	Caching
+	-------
+
+	PerformPathSearch runs for every path search that crosses a city edge, so the
+	scan above is not run there directly: its result is cached per edge tile and
+	search direction. The scan only reads neighbor connection entries and the
+	cell path connections, and the game writes those in
+	cSC4TrafficSimulator::DoConnectionsChanged (lots activated/deactivated, city
+	init, connection-changed message) and AddNeighborConnection, so those call
+	sites just bump a generation counter. After a change, each edge tile is
+	searched once again on first use.
 */
 
 namespace
 {
+	using namespace NeighborConnectionBanding;
+
 	// cSC4TrafficSimulator::PerformPathSearch checks this mask before using the
 	// adjacent tile as the return carriageway for a divided network connection.
 	constexpr uint32_t kForwardPathNetworkMaskTestAddress = 0x0071c8c1;
@@ -76,6 +93,15 @@ namespace
 	constexpr uint32_t kForwardPathFindReturnTileCallAddress = 0x0071c8d6;
 	constexpr uint32_t kReturnPathFindReturnTileCallAddress = 0x0071c952;
 	constexpr uint32_t kOWRNetworkToNcAddress = 0x00aa84ec;
+
+	// Functions that change the data the return-tile search reads. Every call site
+	// is hooked to drop the cached results: DoConnectionsChanged is called by
+	// DoLotActivated, DoLotDeactivated, OnPostCityInit and DoMessage;
+	// AddNeighborConnection by OnPostCityInit and DoMessage.
+	constexpr uint32_t kDoConnectionsChanged = 0x0071a860;
+	constexpr uint32_t kAddNeighborConnection = 0x007153c0;
+	constexpr std::array<uint32_t, 4> kDoConnectionsChangedCallSites = {0x0071e49d, 0x00720568, 0x00723f0d, 0x00724548};
+	constexpr std::array<uint32_t, 2> kAddNeighborConnectionCallSites = {0x0072060d, 0x007242aa};
 
 	// Neighbor connection types, as mapped from network types by the table at 0x00aa84c4.
 	enum class NcType : uint32_t
@@ -95,80 +121,10 @@ namespace
 	constexpr uint16_t kOWRMetadataNcMask = 0x2000;
 
 	constexpr uint32_t kMinSearchDistance = 1;
-	constexpr uint32_t kMaxSearchDistance = 64;
 	constexpr uint32_t kMaxGroupingGap = 16;
-	constexpr size_t kScanCapacity = kMaxSearchDistance * 2 + 1;
 
-	uint32_t gMaxSearchDistance = kMinSearchDistance;
-	uint32_t gMaxGroupingGap = 0;
+	SearchLimits gLimits;
 	bool gEnableNWM = false;
-
-	// Traffic direction seen from the city edge for one path type.
-	enum class PathDir : uint8_t
-	{
-		None,
-		Inbound,
-		Outbound,
-		Bidi // short for Bidirectional
-	};
-
-	// One scanned tile on the city edge, including its NC mask and path direction.
-	struct EdgeTile
-	{
-		int32_t x = 0;
-		int32_t z = 0;
-		int32_t offset = 0;
-		uint16_t ncMask = 0;
-		uint16_t pathMatrix = 0;
-		PathDir direction = PathDir::None;
-		bool valid = false;
-		bool isEligibleNc = false;
-	};
-
-	using EdgeScan = std::array<EdgeTile, kScanCapacity>;
-
-	const EdgeTile& GetScannedTile(const EdgeScan& scannedTiles, const int32_t offset)
-	{
-		return scannedTiles[static_cast<size_t>(offset + static_cast<int32_t>(kMaxSearchDistance))];
-	}
-
-	// A contiguous run of scanned tiles that belong to the same carriageway group.
-	struct Band
-	{
-		size_t firstTile = 0;
-		size_t tileCount = 0;
-	};
-
-	// The grouped source or target side used when mirroring a return tile.
-	struct BandCollection
-	{
-		std::array<EdgeTile, kScanCapacity> tiles{};
-		std::array<Band, kScanCapacity> bands{};
-		size_t tileCount = 0;
-		size_t bandCount = 0;
-
-		void Add(const EdgeTile& tile)
-		{
-			if (tileCount >= tiles.size())
-			{
-				return;
-			}
-
-			const bool startsNewBand =
-				tileCount == 0 || tiles[tileCount - 1].offset + 1 != tile.offset;
-			if (startsNewBand)
-			{
-				if (bandCount >= bands.size())
-				{
-					return;
-				}
-				bands[bandCount++] = Band{tileCount, 0};
-			}
-
-			tiles[tileCount++] = tile;
-			++bands[bandCount - 1].tileCount;
-		}
-	};
 
 	uint16_t GetNeighborConnectionMask(cSC4TrafficSimulator* const pTrafficSim, const int32_t x, const int32_t z)
 	{
@@ -256,82 +212,6 @@ namespace
 		return PathDir::None;
 	}
 
-	PathDir GetOppositeDirection(const PathDir dir)
-	{
-		return dir == PathDir::Inbound ? PathDir::Outbound : PathDir::Inbound;
-	}
-
-	bool IsOneWayDirection(const PathDir dir)
-	{
-		return dir == PathDir::Inbound || dir == PathDir::Outbound;
-	}
-
-	bool IsTargetDirection(const PathDir dir, const PathDir targetDir, const bool allowBidiFallback)
-	{
-		return dir == targetDir || (allowBidiFallback && dir == PathDir::Bidi);
-	}
-
-	bool IsSourceDirection(
-		const PathDir dir,
-		const PathDir sourceDir,
-		const bool allowBidiSource,
-		const bool bidiMustBeContiguous,
-		const uint32_t gap)
-	{
-		if (dir == sourceDir)
-		{
-			return true;
-		}
-		return allowBidiSource && dir == PathDir::Bidi && (!bidiMustBeContiguous || gap == 0);
-	}
-
-	bool TryFindSourceDirectionNearOrigin(
-		const EdgeScan& scannedTiles,
-		const PathDir originDir,
-		const bool allowBidiSource,
-		PathDir& sourceDir)
-	{
-		if (IsOneWayDirection(originDir))
-		{
-			sourceDir = originDir;
-			return true;
-		}
-		if (!allowBidiSource || originDir != PathDir::Bidi)
-		{
-			return false;
-		}
-
-		uint32_t gap = 0;
-		for (int32_t offset = -1; offset >= -static_cast<int32_t>(gMaxSearchDistance); --offset)
-		{
-			const EdgeTile& tile = GetScannedTile(scannedTiles, offset);
-			if (!tile.valid)
-			{
-				break;
-			}
-			if (!tile.isEligibleNc)
-			{
-				if (++gap > gMaxGroupingGap)
-				{
-					break;
-				}
-				continue;
-			}
-			if (IsOneWayDirection(tile.direction))
-			{
-				sourceDir = tile.direction;
-				return true;
-			}
-			if (tile.direction != PathDir::Bidi)
-			{
-				break;
-			}
-			gap = 0;
-		}
-
-		return false;
-	}
-
 	EdgeTile ReadEdgeTile(cSC4TrafficSimulator* const pTrafficSim, const int32_t originX, const int32_t originZ,
 	                      const int32_t stepX, const int32_t stepZ, const uint16_t eligibleNcMask, const int32_t offset)
 	{
@@ -353,159 +233,6 @@ namespace
 		tile.isEligibleNc = (tile.ncMask & eligibleNcMask) != 0;
 		tile.direction = GetPathDirection(pTrafficSim, tile.x, tile.z, tile.pathMatrix);
 		return tile;
-	}
-
-	// Finds how far the source carriageway continues from the origin, allowing small gaps.
-	int32_t FindSourceExtent(
-		const EdgeScan& scannedTiles,
-		const PathDir sourceDir,
-		const bool allowBidiSource,
-		const int32_t inc)
-	{
-		int32_t extent = 0;
-		uint32_t gap = 0;
-		for (int32_t distance = 1;
-			distance <= static_cast<int32_t>(gMaxSearchDistance);
-			++distance)
-		{
-			const int32_t offset = distance * inc;
-			const EdgeTile& tile = GetScannedTile(scannedTiles, offset);
-			if (!tile.valid)
-			{
-				break;
-			}
-
-			if (!tile.isEligibleNc)
-			{
-				if (++gap > gMaxGroupingGap)
-				{
-					break;
-				}
-				continue;
-			}
-
-			if (!IsSourceDirection(tile.direction, sourceDir, allowBidiSource, true, gap))
-			{
-				break;
-			}
-
-			extent = offset;
-			gap = 0;
-		}
-		return extent;
-	}
-
-	// Finds the first tile after the source side that can act as the return side.
-	bool FindTargetStart(
-		const EdgeScan& scannedTiles,
-		const PathDir sourceDir,
-		const PathDir targetDir,
-		const bool allowBidiSource,
-		const bool allowBidiTarget,
-		int32_t& targetStart)
-	{
-		uint32_t gap = 0;
-		for (int32_t offset = 1;
-			offset <= static_cast<int32_t>(gMaxSearchDistance);
-			++offset)
-		{
-			const EdgeTile& tile = GetScannedTile(scannedTiles, offset);
-			if (!tile.valid)
-			{
-				break;
-			}
-			if (!tile.isEligibleNc)
-			{
-				++gap;
-				continue;
-			}
-			if (IsSourceDirection(tile.direction, sourceDir, allowBidiSource, true, gap))
-			{
-				gap = 0;
-				continue;
-			}
-			if (IsTargetDirection(tile.direction, targetDir, allowBidiTarget))
-			{
-				targetStart = offset;
-				return true;
-			}
-
-			break;
-		}
-		return false;
-	}
-
-	BandCollection BuildSourceBands(
-		const EdgeScan& scannedTiles,
-		const PathDir sourceDir,
-		const bool allowBidiSource,
-		const int32_t minOffset,
-		const int32_t maxOffset)
-	{
-		BandCollection result;
-		for (int32_t offset = minOffset; offset <= maxOffset; ++offset)
-		{
-			const EdgeTile& tile = GetScannedTile(scannedTiles, offset);
-			if (tile.valid &&
-				tile.isEligibleNc &&
-				IsSourceDirection(tile.direction, sourceDir, allowBidiSource, false, 0))
-			{
-				result.Add(tile);
-			}
-		}
-		return result;
-	}
-
-	BandCollection BuildTargetBands(const EdgeScan& scannedTiles, const PathDir targetDir, const bool allowBidiTarget, const int32_t targetStart)
-	{
-		BandCollection result;
-		uint32_t gap = 0;
-		for (int32_t offset = targetStart;
-			offset <= static_cast<int32_t>(gMaxSearchDistance);
-			++offset)
-		{
-			const EdgeTile& tile = GetScannedTile(scannedTiles, offset);
-			if (!tile.valid)
-			{
-				break;
-			}
-
-			if (!tile.isEligibleNc)
-			{
-				if (++gap > gMaxGroupingGap)
-				{
-					break;
-				}
-				continue;
-			}
-
-			if (!IsTargetDirection(tile.direction, targetDir, allowBidiTarget))
-			{
-				break;
-			}
-
-			result.Add(tile);
-			gap = 0;
-		}
-		return result;
-	}
-
-	bool FindTileInBands(const BandCollection& collection, const int32_t tileOffset, size_t& bandIndex, size_t& tileIndexInBand)
-	{
-		for (size_t currentBand = 0; currentBand < collection.bandCount; ++currentBand)
-		{
-			const Band& band = collection.bands[currentBand];
-			for (size_t currentTile = 0; currentTile < band.tileCount; ++currentTile)
-			{
-				if (collection.tiles[band.firstTile + currentTile].offset == tileOffset)
-				{
-					bandIndex = currentBand;
-					tileIndexInBand = currentTile;
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 
 	// Returns the one-tile step along the current city edge.
@@ -535,61 +262,29 @@ namespace
 		}
 
 		EdgeScan scannedTiles{};
-		for (int32_t offset = -static_cast<int32_t>(gMaxSearchDistance);
-			offset <= static_cast<int32_t>(gMaxSearchDistance);
+		for (int32_t offset = -static_cast<int32_t>(gLimits.maxSearchDistance);
+			offset <= static_cast<int32_t>(gLimits.maxSearchDistance);
 			++offset)
 		{
 			scannedTiles[static_cast<size_t>(offset + static_cast<int32_t>(kMaxSearchDistance))] =
 				ReadEdgeTile(pTrafficSim, originX, originZ, stepX, stepZ, eligibleNcMask, offset);
 		}
 
-		const EdgeTile& origin = GetScannedTile(scannedTiles, 0);
-		PathDir sourceDirection = PathDir::None;
-		if (!TryFindSourceDirectionNearOrigin(scannedTiles, origin.direction, allowBidiSource, sourceDirection))
+		int32_t resultOffset = 0;
+		if (!TryFindPairedReturnOffset(scannedTiles, gLimits, allowBidiSource, allowBidiTarget, resultOffset))
 		{
 			return false;
 		}
 
-		const PathDir targetDirection = GetOppositeDirection(sourceDirection);
-		int32_t targetStart = 0;
-		if (!FindTargetStart(scannedTiles, sourceDirection, targetDirection, allowBidiSource, allowBidiTarget, targetStart))
-		{
-			return false;
-		}
-
-		const auto negSourceExtent = FindSourceExtent(scannedTiles, sourceDirection, allowBidiSource, -1);
-		const auto posSourceExtent = FindSourceExtent(scannedTiles, sourceDirection, allowBidiSource, 1);
-		const auto maxOffset = std::min(posSourceExtent, targetStart - 1);
-		const auto sourceBands = BuildSourceBands(scannedTiles, sourceDirection, allowBidiSource, negSourceExtent, maxOffset);
-		const auto targetBands = BuildTargetBands(scannedTiles, targetDirection, allowBidiTarget, targetStart);
-		if (sourceBands.bandCount == 0 || targetBands.bandCount == 0)
-		{
-			return false;
-		}
-
-		size_t sourceBandIndex = 0;
-		size_t sourceTileIndex = 0;
-		if (!FindTileInBands(sourceBands, 0, sourceBandIndex, sourceTileIndex))
-		{
-			return false;
-		}
-
-		// Source bands and lanes are indexed from the target-facing side. Target
-		// bands and lanes are already stored from the source-facing side.
-		const size_t facingSourceBandIndex = sourceBands.bandCount - sourceBandIndex - 1;
-		const size_t targetBandIndex = facingSourceBandIndex * targetBands.bandCount / sourceBands.bandCount;
-		const Band& sourceBand = sourceBands.bands[sourceBandIndex];
-		const Band& targetBand = targetBands.bands[targetBandIndex];
-		const size_t facingSourceTileIndex = sourceBand.tileCount - sourceTileIndex - 1;
-		const size_t targetTileIndex = facingSourceTileIndex * targetBand.tileCount / sourceBand.tileCount;
-		const EdgeTile& result = targetBands.tiles[targetBand.firstTile + targetTileIndex];
-
+		const EdgeTile& result = GetScannedTile(scannedTiles, resultOffset);
 		resultX = result.x;
 		resultZ = result.z;
 		return true;
 	}
 
-	// Road NCs are broad. Only one-way Road edge tiles should enter the NWM search.
+	// The Road NC type is shared by every Road piece, so only Road edge tiles that
+	// carry car traffic in one direction (NWM pieces such as half an AVE-6) may
+	// enter the NWM search. This never covers OWR, which is a DirtRoad NC.
 	bool IsOneWayRoadConnection(cSC4TrafficSimulator* const pTrafficSim, const int32_t originX, const int32_t originZ, const uint16_t originMask)
 	{
 		if (!gEnableNWM ||
@@ -619,10 +314,66 @@ namespace
 		return mask;
 	}
 
-	void __fastcall FindReturnTile(cSC4TrafficSimulator* const pTrafficSim, void*, int32_t* const pX, int32_t* const pZ, const bool reverseSearch)
+	// Cached result of the return-tile search for one edge tile and search direction.
+	struct ReturnTileEntry
 	{
-		const int32_t originX = *pX;
-		const int32_t originZ = *pZ;
+		int16_t x = 0;
+		int16_t z = 0;  // edge tile coordinates, always well inside int16
+		uint16_t kind = 0;  // 0 = never computed
+		uint32_t generation = 0;  // 0 = never computed
+	};
+
+	enum ReturnTileKind : uint16_t
+	{
+		kVanillaStep = 1,  // hand the tile to the original FindHighwayReturnTile
+		kUseCachedTile = 2,  // use x/z as computed by this patch
+	};
+
+	constexpr size_t kEdgeCount = 4;
+	constexpr size_t kSearchDirectionCount = 2;
+
+	std::vector<ReturnTileEntry> gReturnTileCache;
+	cSC4TrafficSimulator* gCacheOwner = nullptr;
+	size_t gCacheCells = 0;
+	uint32_t gCacheGeneration = 0;
+
+	// One slot per (city edge, boundary cell, search direction).
+	ReturnTileEntry* GetReturnTileSlot(cSC4TrafficSimulator* const pTrafficSim, const int32_t x, const int32_t z, const bool reverseSearch)
+	{
+		int32_t cellX = 0;
+		int32_t cellZ = 0;
+		uint32_t edge = 0;
+		if (!TryGetBoundaryCellAndEdge(pTrafficSim, x, z, cellX, cellZ, edge))
+		{
+			return nullptr;
+		}
+
+		const size_t cellsX = static_cast<size_t>(pTrafficSim->maxCellX) + 1;
+		const size_t cellsZ = static_cast<size_t>(pTrafficSim->maxCellZ) + 1;
+		const size_t cells = cellsX * cellsZ;
+		if (pTrafficSim != gCacheOwner || cells != gCacheCells)
+		{
+			gCacheOwner = pTrafficSim;
+			gCacheCells = cells;
+			gCacheGeneration = 1;  // entries are stamped 0, so a fresh table is empty
+			gReturnTileCache.assign(cells * kEdgeCount * kSearchDirectionCount, ReturnTileEntry{});
+		}
+
+		const size_t index =
+			(static_cast<size_t>(edge) * kSearchDirectionCount + (reverseSearch ? 1 : 0)) * gCacheCells +
+			static_cast<size_t>(cellZ) * cellsX + static_cast<size_t>(cellX);
+		return &gReturnTileCache[index];
+	}
+
+	struct ReturnTileDecision
+	{
+		uint16_t kind;
+		int32_t x;
+		int32_t z;
+	};
+
+	ReturnTileDecision ResolveReturnTile(cSC4TrafficSimulator* const pTrafficSim, const int32_t originX, const int32_t originZ, const bool reverseSearch)
+	{
 		const uint16_t originMask = GetNeighborConnectionMask(pTrafficSim, originX, originZ);
 		const bool useRHWPairing = (originMask & kDirtRoadNcMask) != 0;
 		const bool useNWMPairing = !useRHWPairing && IsOneWayRoadConnection(pTrafficSim, originX, originZ, originMask);
@@ -633,43 +384,115 @@ namespace
 			// Road NC that only passed the mask test because NWM added Road, so it stays unchanged.
 			if ((originMask & kVanillaDividedNetworkNcMask) != 0)
 			{
-				cSC4TrafficSimulator::FindHighwayReturnTile(pTrafficSim, pX, pZ, reverseSearch);
+				return {kVanillaStep, originX, originZ};
 			}
-			return;
+			return {kUseCachedTile, originX, originZ};
 		}
 
 		int32_t stepX = 0;
 		int32_t stepZ = 0;
 		if (useRHWPairing)
 		{
-			cSC4TrafficSimulator::FindHighwayReturnTile(pTrafficSim, pX, pZ, reverseSearch);
-			stepX = *pX - originX;
-			stepZ = *pZ - originZ;
+			int32_t nextX = originX;
+			int32_t nextZ = originZ;
+			cSC4TrafficSimulator::FindHighwayReturnTile(pTrafficSim, &nextX, &nextZ, reverseSearch);
+			stepX = nextX - originX;
+			stepZ = nextZ - originZ;
 		}
 		else if (!TryGetEdgeScanStep(pTrafficSim, originX, originZ, stepX, stepZ))
 		{
-			*pX = originX;
-			*pZ = originZ;
-			return;
+			return {kUseCachedTile, originX, originZ};
 		}
 
 		const uint16_t eligibleNcMask = useRHWPairing ? kDirtRoadNcMask : kRoadNcMask;
 		const bool useOWRPairing = useRHWPairing && (originMask & kOWRMetadataNcMask) != 0;
 		const bool allowBidiSource = useOWRPairing;
 		const bool allowBidiTarget = useOWRPairing || useNWMPairing;
+
+		int32_t resultX = 0;
+		int32_t resultZ = 0;
 		bool paired = TryFindPairedReturnTile(
-			pTrafficSim, originX, originZ, stepX, stepZ, eligibleNcMask, allowBidiSource, allowBidiTarget, *pX, *pZ);
+			pTrafficSim, originX, originZ, stepX, stepZ, eligibleNcMask, allowBidiSource, allowBidiTarget, resultX, resultZ);
 
 		if (!paired && useNWMPairing)
 		{
 			paired = TryFindPairedReturnTile(
-				pTrafficSim, originX, originZ, -stepX, -stepZ, eligibleNcMask, allowBidiSource, allowBidiTarget, *pX, *pZ);
+				pTrafficSim, originX, originZ, -stepX, -stepZ, eligibleNcMask, allowBidiSource, allowBidiTarget, resultX, resultZ);
 		}
 
 		if (!paired)
 		{
-			*pX = originX;
-			*pZ = originZ;
+			return {kUseCachedTile, originX, originZ};
+		}
+		return {kUseCachedTile, resultX, resultZ};
+	}
+
+	void __fastcall FindReturnTile(cSC4TrafficSimulator* const pTrafficSim, void*, int32_t* const pX, int32_t* const pZ, const bool reverseSearch)
+	{
+		const int32_t originX = *pX;
+		const int32_t originZ = *pZ;
+
+		ReturnTileEntry* const slot = GetReturnTileSlot(pTrafficSim, originX, originZ, reverseSearch);
+		if (slot != nullptr && slot->generation == gCacheGeneration)
+		{
+			if (slot->kind == kVanillaStep)
+			{
+				cSC4TrafficSimulator::FindHighwayReturnTile(pTrafficSim, pX, pZ, reverseSearch);
+			}
+			else
+			{
+				*pX = slot->x;
+				*pZ = slot->z;
+			}
+			return;
+		}
+
+		const ReturnTileDecision decision = ResolveReturnTile(pTrafficSim, originX, originZ, reverseSearch);
+		if (slot != nullptr)
+		{
+			slot->x = static_cast<int16_t>(decision.x);
+			slot->z = static_cast<int16_t>(decision.z);
+			slot->kind = decision.kind;
+			slot->generation = gCacheGeneration;
+		}
+
+		if (decision.kind == kVanillaStep)
+		{
+			cSC4TrafficSimulator::FindHighwayReturnTile(pTrafficSim, pX, pZ, reverseSearch);
+		}
+		else
+		{
+			*pX = decision.x;
+			*pZ = decision.z;
+		}
+	}
+
+	void InvalidateReturnTileCache()
+	{
+		++gCacheGeneration;
+	}
+
+	// Trampolines installed over the calls to the two game functions above: drop the
+	// cached tiles, then run the original function with the original arguments.
+	void NAKED_FUN ConnectionsChangedHook(void)
+	{
+		__asm {
+			pushad
+			call InvalidateReturnTileCache;
+			popad;
+			push kDoConnectionsChanged;
+			ret;
+		}
+	}
+
+	void NAKED_FUN NeighborConnectionHook(void)
+	{
+		__asm {
+			pushad
+			call InvalidateReturnTileCache;
+			popad;
+			push kAddNeighborConnection;
+			ret;
 		}
 	}
 }
@@ -678,8 +501,19 @@ void NeighborConnections::Install(const Options& options)
 {
 	const bool enableRHW = options.enableRHW || options.enableOWR; // For OWR to be enabled, RHW needs to be enabled
 	gEnableNWM = options.enableNWM;
-	gMaxSearchDistance = std::clamp(options.maxSearchDistance, kMinSearchDistance, kMaxSearchDistance);
-	gMaxGroupingGap = std::min(options.maxGroupingGap, kMaxGroupingGap);
+	gLimits.maxSearchDistance = std::clamp(options.maxSearchDistance, kMinSearchDistance, kMaxSearchDistance);
+	gLimits.maxGroupingGap = std::min(options.maxGroupingGap, kMaxGroupingGap);
+
+	// Keep the cached return tiles from going stale. These hooks only bump a
+	// counter, so they go in before anything that changes game behaviour.
+	for (const uint32_t callSite : kDoConnectionsChangedCallSites)
+	{
+		Patching::InstallCallSiteHook(callSite, kDoConnectionsChanged, reinterpret_cast<void (*)()>(ConnectionsChangedHook));
+	}
+	for (const uint32_t callSite : kAddNeighborConnectionCallSites)
+	{
+		Patching::InstallCallSiteHook(callSite, kAddNeighborConnection, reinterpret_cast<void (*)()>(NeighborConnectionHook));
+	}
 
 	Patching::InstallCallHook(kForwardPathFindReturnTileCallAddress, reinterpret_cast<void (*)()>(FindReturnTile));
 	Patching::InstallCallHook(kReturnPathFindReturnTileCallAddress, reinterpret_cast<void (*)()>(FindReturnTile));

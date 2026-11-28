@@ -98,6 +98,51 @@ set_target_properties(NAM PROPERTIES
     SUFFIX ".dll"
 )
 
+option(NAM_BUILD_TESTS "Build the unit tests" ON)
+
+if(NAM_BUILD_TESTS)
+    if(NOT EXISTS "${NAM_ROOT}/vendor/doctest/doctest/doctest.h")
+        message(FATAL_ERROR
+            "vendor/doctest is missing. Run `git submodule update --init`, "
+            "or configure with -DNAM_BUILD_TESTS=OFF."
+        )
+    endif()
+
+    enable_testing()
+
+    # One executable: the tests share a doctest main and are reported per case.
+    # Only the game-free parts of the patch are covered here.
+    add_executable(NAMTests
+        tests/TestMain.cpp
+        tests/NeighborConnectionBandingTests.cpp
+    )
+
+    target_compile_features(NAMTests PRIVATE cxx_std_20)
+
+    target_include_directories(NAMTests PRIVATE
+        "${NAM_ROOT}/src"
+        "${NAM_ROOT}/vendor/doctest"
+    )
+
+    target_compile_definitions(NAMTests PRIVATE
+        WIN32
+        NOMINMAX
+        _CRT_SECURE_NO_WARNINGS
+    )
+
+    if(MSVC)
+        set_property(TARGET NAMTests PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
+        )
+        target_compile_options(NAMTests PRIVATE /W3 /EHsc /permissive-)
+    endif()
+
+    # Register every doctest case as its own CTest test.
+    list(APPEND CMAKE_MODULE_PATH "${NAM_ROOT}/vendor/doctest/scripts/cmake")
+    include(doctest)
+    doctest_discover_tests(NAMTests)
+endif()
+
 set(NAM_PLUGIN_DIR "$ENV{USERPROFILE}/Documents/SimCity 4/Plugins"
     CACHE PATH "SimCity 4 Plugins directory used for post-build deployment"
 )

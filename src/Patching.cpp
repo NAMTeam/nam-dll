@@ -98,6 +98,15 @@ void Patching::PatchTestWordPtrEaxImmediate16(
 	PatchImmediate16(address + 3, expectedValue, newValue);
 }
 
+void Patching::InstallCallSiteHook(const uint32_t callSite, const uint32_t expectedTarget, void (*pfnFunc)(void))
+{
+	const uint32_t* const instruction = reinterpret_cast<const uint32_t*>(callSite);
+	const uint32_t target = callSite + 5 + static_cast<uint32_t>(static_cast<int32_t>(instruction[1]));
+	const uint32_t hookAddress = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(pfnFunc));
+	THROW_HR_IF(E_FAIL, (instruction[0] & 0xff) != 0xE8 || (target != expectedTarget && target != hookAddress));
+	InstallCallHook(callSite, pfnFunc);
+}
+
 void Patching::InstallHook(uint32_t address, void (*pfnFunc)(void))
 {
 	DWORD oldProtect;
